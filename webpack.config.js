@@ -3,17 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-//@ts-check
-
 // See https://github.com/Microsoft/vscode-azuretools/wiki/webpack for guidance
 
 'use strict';
 
+/* eslint-disable @typescript-eslint/no-var-requires */
 const process = require('process');
 const webpack = require('webpack');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
-const StringReplacePlugin = require("string-replace-webpack-plugin");
-const dev = require("vscode-azureextensiondev");
+const StringReplacePlugin = require('string-replace-webpack-plugin');
+const dev = require('vscode-azureextensiondev');
+/* eslint-enable @typescript-eslint/no-var-requires */
 
 let DEBUG_WEBPACK = !!process.env.DEBUG_WEBPACK;
 
@@ -25,9 +25,6 @@ let config = dev.getDefaultWebpackConfig({
         // Modules that we can't easily webpack for some reason.
         // These and their dependencies will be copied into node_modules rather than placed in the bundle
         // Keep this list small, because all the subdependencies will also be excluded
-
-        // has binary
-        'win-ca'
     ],
     entries: {
         // Note: Each entry is a completely separate Node.js application that cannot interact with any
@@ -42,8 +39,6 @@ let config = dev.getDefaultWebpackConfig({
     {
         // ./getCoreNodeModule.js (path from keytar.ts) uses a dynamic require which can't be webpacked
         './getCoreNodeModule': 'commonjs getCoreNodeModule',
-
-        'win-ca/fallback': 'commonjs win-ca/fallback',
     }, // end of externals
 
     loaderRules: [
@@ -58,7 +53,7 @@ let config = dev.getDefaultWebpackConfig({
                 replacements: [
                     {
                         pattern: /var WebSocketServer = \(this.wsEngine \? require\(this\.wsEngine\) : require\('ws'\)\)\.Server;/ig,
-                        replacement: function (match, offset, string) {
+                        replacement: function (match, offset, str) {
                             // Since we're not using the wsEngine option, we'll just require it to not be set and use only the `require('ws')` call.
                             return `if (!!this.wsEngine) {
                                             throw new Error('wsEngine option not supported with current webpack settings');
@@ -82,7 +77,7 @@ let config = dev.getDefaultWebpackConfig({
                 replacements: [
                     {
                         pattern: /cpSpawnSync = require\('spawn-sync'\);/ig,
-                        replacement: function (match, offset, string) {
+                        replacement: function (match, offset, str) {
                             // The code in question only applies to Node 0.10 or less (see comments in code), so just throw an error
                             return `throw new Error("This shouldn't happen"); // MODIFIED`;
                         }
@@ -96,46 +91,8 @@ let config = dev.getDefaultWebpackConfig({
             // handle them.
             test: /dockerfile-language-service|vscode-languageserver-types/,
             use: { loader: 'umd-compat-loader' }
-        },
-
-        {
-            // Fix error in win-ca: Module parse failed: 'return' outside of function (5:2)
-            //
-            // if (process.platform !== 'win32') {
-            //    return;  <<<<<<<<<<
-            // }
-            test: /win-ca[/\\]lib[/\\]index.js$/,
-            loader: StringReplacePlugin.replace({
-                replacements: [
-                    {
-                        pattern: /return;/ig,
-                        replacement: function (match, offset, string) {
-                            return `// Don't need platform check - we do that before calling the module`;
-                        }
-                    }
-                ]
-            })
-        },
-        {
-            // Fix error in mac-ca: Module parse failed: 'return' outside of function (7:2)
-            //
-            // if (process.platform !== 'darwin') {
-            //     module.exports.all = () => [];
-            //     module.exports.each = () => {};
-            //     return;  <<<<<<<<<
-            //   }
-            test: /mac-ca[/\\]index.js$/,
-            loader: StringReplacePlugin.replace({
-                replacements: [
-                    {
-                        pattern: /return;/ig,
-                        replacement: function (match, offset, string) {
-                            return `// Don't need platform check - we do that before calling the module`;
-                        }
-                    }
-                ]
-            })
         }
+
     ], // end of loaderRules
 
     plugins: [
@@ -146,10 +103,16 @@ let config = dev.getDefaultWebpackConfig({
         ),
 
         // Copy files to dist folder where the runtime can find them
-        new CopyWebpackPlugin([
-            // getCoreNodeModule.js -> dist/node_modules/getCoreNodeModule.js
-            { from: './out/src/utils/getCoreNodeModule.js', to: 'node_modules' }
-        ]),
+        new CopyWebpackPlugin({
+            patterns: [
+                // getCoreNodeModule.js -> dist/node_modules/getCoreNodeModule.js
+                { from: './out/src/utils/getCoreNodeModule.js', to: 'node_modules' },
+
+                // node_modules/vscode-codicons/dist/codicon.css, .ttf -> dist/node_modules/vscode-codicons/dist/codicon.css, .ttf
+                { from: './node_modules/vscode-codicons/dist/codicon.css', to: 'node_modules/vscode-codicons/dist' },
+                { from: './node_modules/vscode-codicons/dist/codicon.ttf', to: 'node_modules/vscode-codicons/dist' },
+            ]
+        }),
 
         // An instance of the StringReplacePlugin plugin must be present for it to work (its use is configured in modules).
         new StringReplacePlugin()

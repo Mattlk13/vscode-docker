@@ -7,50 +7,64 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { IActionContext } from "vscode-azureextensionui";
 import { ext } from "../../extensionVariables";
-import { delay } from "../../utils/delay";
-import { quickPickDockerFileItem } from "../../utils/quick-pick-file";
+import { localize } from '../../localize';
+import { getOfficialBuildTaskForDockerfile } from "../../tasks/TaskHelper";
+import { executeAsTask } from "../../utils/executeAsTask";
+import { getValidImageNameFromPath } from "../../utils/getValidImageName";
+import { delay } from "../../utils/promiseUtils";
+import { quickPickDockerFileItem } from "../../utils/quickPickFile";
 import { quickPickWorkspaceFolder } from "../../utils/quickPickWorkspaceFolder";
+import { selectBuildCommand } from "../selectCommandTemplate";
 import { addImageTaggingTelemetry, getTagFromUserInput } from "./tagImage";
+
+const tagRegex: RegExp = /\$\{tag\}/i;
 
 export async function buildImage(context: IActionContext, dockerFileUri: vscode.Uri | undefined): Promise<void> {
     const configOptions: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration('docker');
     const defaultContextPath = configOptions.get('imageBuildContextPath', '');
 
-    let rootFolder: vscode.WorkspaceFolder = await quickPickWorkspaceFolder('To build Docker files you must first open a folder or workspace in VS Code.');
+    let rootFolder: vscode.WorkspaceFolder;
+    if (dockerFileUri) {
+        rootFolder = vscode.workspace.getWorkspaceFolder(dockerFileUri);
+    }
+
+    rootFolder = rootFolder || await quickPickWorkspaceFolder(localize('vscode-docker.commands.images.build.workspaceFolder', 'To build Docker files you must first open a folder or workspace in VS Code.'));
 
     const dockerFileItem = await quickPickDockerFileItem(context, dockerFileUri, rootFolder);
+    const task = await getOfficialBuildTaskForDockerfile(dockerFileItem.absoluteFilePath, rootFolder);
 
-    let contextPath: string = dockerFileItem.relativeFolderPath;
-    if (defaultContextPath && defaultContextPath !== '') {
-        contextPath = defaultContextPath;
-    }
-    let absFilePath: string = path.join(rootFolder.uri.fsPath, dockerFileItem.relativeFilePath);
-    let dockerFileKey = `buildTag_${absFilePath}`;
-    let prevImageName: string | undefined = ext.context.globalState.get(dockerFileKey);
-    let suggestedImageName: string;
+    if (task) {
+        await vscode.tasks.executeTask(task);
+    } else {
+        const contextPath: string = defaultContextPath || dockerFileItem.relativeFolderPath;
 
-    if (!prevImageName) {
-        // Get imageName based on name of subfolder containing the Dockerfile, or else workspacefolder
-        suggestedImageName = path.basename(dockerFileItem.relativeFolderPath).toLowerCase();
-        if (suggestedImageName === '.') {
-            suggestedImageName = path.basename(rootFolder.uri.fsPath).toLowerCase();
+        let terminalCommand = await selectBuildCommand(
+            context,
+            rootFolder,
+            dockerFileItem.relativeFilePath,
+            contextPath
+        );
+
+        // Replace '${tag}' if needed. Tag is a special case because we don't want to prompt unless necessary, so must manually replace it.
+        if (tagRegex.test(terminalCommand)) {
+            const absFilePath: string = path.join(rootFolder.uri.fsPath, dockerFileItem.relativeFilePath);
+            const dockerFileKey = `buildTag_${absFilePath}`;
+            const prevImageName: string | undefined = ext.context.globalState.get(dockerFileKey);
+
+            // Get imageName based previous entries, else on name of subfolder containing the Dockerfile
+            const suggestedImageName = prevImageName || getValidImageNameFromPath(dockerFileItem.absoluteFolderPath, 'latest');
+
+            // Temporary work-around for vscode bug where valueSelection can be messed up if a quick pick is followed by a showInputBox
+            await delay(500);
+
+            addImageTaggingTelemetry(context, suggestedImageName, '.before');
+            const imageName: string = await getTagFromUserInput(suggestedImageName);
+            addImageTaggingTelemetry(context, imageName, '.after');
+
+            await ext.context.globalState.update(dockerFileKey, imageName);
+            terminalCommand = terminalCommand.replace(tagRegex, imageName);
         }
 
-        suggestedImageName += ":latest"
-    } else {
-        suggestedImageName = prevImageName;
+        await executeAsTask(context, terminalCommand, 'Docker', { addDockerEnv: true, workspaceFolder: rootFolder });
     }
-
-    // Temporary work-around for vscode bug where valueSelection can be messed up if a quick pick is followed by a showInputBox
-    await delay(500);
-
-    addImageTaggingTelemetry(context, suggestedImageName, '.before');
-    const imageName: string = await getTagFromUserInput(suggestedImageName, !prevImageName);
-    addImageTaggingTelemetry(context, imageName, '.after');
-
-    await ext.context.globalState.update(dockerFileKey, imageName);
-
-    const terminal: vscode.Terminal = ext.terminalProvider.createTerminal('Docker');
-    terminal.sendText(`docker build --rm -f "${dockerFileItem.relativeFilePath}" -t ${imageName} ${contextPath}`);
-    terminal.show();
 }

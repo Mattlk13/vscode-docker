@@ -5,14 +5,26 @@
 
 import { IActionContext } from 'vscode-azureextensionui';
 import { ext } from '../../extensionVariables';
+import { localize } from '../../localize';
 import { ContainerTreeItem } from '../../tree/containers/ContainerTreeItem';
+import { executeAsTask } from '../../utils/executeAsTask';
+import { selectLogsCommand } from '../selectCommandTemplate';
 
 export async function viewContainerLogs(context: IActionContext, node?: ContainerTreeItem): Promise<void> {
     if (!node) {
-        node = await ext.containersTree.showTreeItemPicker<ContainerTreeItem>(ContainerTreeItem.allContextRegExp, context);
+        await ext.containersTree.refresh();
+        node = await ext.containersTree.showTreeItemPicker<ContainerTreeItem>(ContainerTreeItem.allContextRegExp, {
+            ...context,
+            noItemFoundErrorMessage: localize('vscode-docker.commands.containers.viewLogs.noContainers', 'No containers are available to view logs')
+        });
     }
 
-    const terminal = ext.terminalProvider.createTerminal(node.fullTag);
-    terminal.sendText(`docker logs -f ${node.containerId}`);
-    terminal.show();
+    const terminalCommand = await selectLogsCommand(
+        context,
+        node.containerName,
+        node.fullTag,
+        node.containerId
+    );
+
+    await executeAsTask(context, terminalCommand, node.fullTag, { addDockerEnv: true });
 }

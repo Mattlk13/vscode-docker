@@ -3,36 +3,38 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Image } from 'dockerode';
-import { AzExtParentTreeItem, AzExtTreeItem } from "vscode-azureextensionui";
+import { AzExtParentTreeItem, IActionContext } from "vscode-azureextensionui";
 import { ext } from '../../extensionVariables';
+import { localize } from "../../localize";
+import { AzExtTreeItemIntermediate } from "../AzExtTreeItemIntermediate";
 import { getThemedIconPath, IconPath } from '../IconPath';
-import { ILocalImageInfo } from './LocalImageInfo';
+import { getTreeId } from "../LocalRootTreeItemBase";
+import { DatedDockerImage } from "./ImagesTreeItem";
 
-export class ImageTreeItem extends AzExtTreeItem {
+export class ImageTreeItem extends AzExtTreeItemIntermediate {
     public static contextValue: string = 'image';
     public contextValue: string = ImageTreeItem.contextValue;
-    private readonly _item: ILocalImageInfo;
+    private readonly _item: DatedDockerImage;
 
-    public constructor(parent: AzExtParentTreeItem, itemInfo: ILocalImageInfo) {
+    public constructor(parent: AzExtParentTreeItem, itemInfo: DatedDockerImage) {
         super(parent);
         this._item = itemInfo;
     }
 
     public get id(): string {
-        return this._item.treeId;
+        return getTreeId(this._item);
     }
 
     public get createdTime(): number {
-        return this._item.createdTime;
+        return this._item.CreatedTime;
     }
 
     public get imageId(): string {
-        return this._item.imageId;
+        return this._item.Id;
     }
 
     public get fullTag(): string {
-        return this._item.fullTag;
+        return this._item.Name;
     }
 
     public get label(): string {
@@ -40,10 +42,14 @@ export class ImageTreeItem extends AzExtTreeItem {
     }
 
     public get description(): string | undefined {
-        return ext.imagesRoot.getTreeItemDescription(this._item);
+        return `${ext.imagesRoot.getTreeItemDescription(this._item)}${this._item.Outdated ? localize('vscode-docker.tree.images.outdated', ' (Out of date)') : ''}`;
     }
 
     public get iconPath(): IconPath {
+        if (this._item.Outdated) {
+            return getThemedIconPath('statusWarning');
+        }
+
         let icon: string;
         switch (ext.imagesRoot.labelSetting) {
             case 'Tag':
@@ -55,11 +61,19 @@ export class ImageTreeItem extends AzExtTreeItem {
         return getThemedIconPath(icon);
     }
 
-    public getImage(): Image {
-        return ext.dockerode.getImage(this.imageId);
+    public get size(): number {
+        return this._item.Size ?? 0;
     }
 
-    public async deleteTreeItemImpl(): Promise<void> {
-        await this.getImage().remove({ force: true });
+    public async deleteTreeItemImpl(context: IActionContext): Promise<void> {
+        let ref = this.fullTag;
+
+        // Dangling images are not shown in the explorer. However, an image can end up with <none> tag, if a new version of that particular tag is pulled.
+        if (ref.endsWith(':<none>') && this._item.RepoDigests?.length) {
+            // Image is tagged <none>. Need to delete by digest.
+            ref = this._item.RepoDigests[0];
+        }
+
+        return ext.dockerClient.removeImage(context, ref);
     }
 }

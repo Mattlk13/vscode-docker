@@ -9,9 +9,10 @@ import { dockerHubUrl, PAGE_SIZE } from "../../../constants";
 import { ext } from "../../../extensionVariables";
 import { nonNullProp } from "../../../utils/nonNull";
 import { registryRequest } from "../../../utils/registryRequestUtils";
-import { getThemedIconPath, IconPath } from "../../IconPath";
+import { getThemedIconPath } from "../../IconPath";
 import { ICachedRegistryProvider } from "../ICachedRegistryProvider";
 import { IRegistryProviderTreeItem } from "../IRegistryProviderTreeItem";
+import { RegistryConnectErrorTreeItem } from "../RegistryConnectErrorTreeItem";
 import { getRegistryContextValue, registryProviderSuffix } from "../registryContextValues";
 import { getRegistryPassword } from "../registryPasswords";
 import { DockerHubNamespaceTreeItem } from "./DockerHubNamespaceTreeItem";
@@ -28,22 +29,13 @@ export class DockerHubAccountTreeItem extends AzExtParentTreeItem implements IRe
     public constructor(parent: AzExtParentTreeItem, cachedProvider: ICachedRegistryProvider) {
         super(parent);
         this.cachedProvider = cachedProvider;
+        this.id = this.cachedProvider.id + this.username;
+        this.iconPath = getThemedIconPath('docker');
+        this.description = ext.registriesRoot.hasMultiplesOfProvider(this.cachedProvider) ? this.username : undefined;
     }
 
     public get contextValue(): string {
         return getRegistryContextValue(this, registryProviderSuffix);
-    }
-
-    public get description(): string | undefined {
-        return ext.registriesRoot.hasMultiplesOfProvider(this.cachedProvider) ? this.username : undefined;
-    }
-
-    public get id(): string {
-        return this.cachedProvider.id + this.username;
-    }
-
-    public get iconPath(): IconPath {
-        return getThemedIconPath('docker');
     }
 
     public get username(): string {
@@ -57,7 +49,13 @@ export class DockerHubAccountTreeItem extends AzExtParentTreeItem implements IRe
     public async loadMoreChildrenImpl(clearCache: boolean, _context: IActionContext): Promise<AzExtTreeItem[]> {
         if (clearCache) {
             this._nextLink = undefined;
-            await this.refreshToken();
+
+            try {
+                await this.refreshToken();
+            } catch (err) {
+                // If creds are invalid, the above refreshToken will fail
+                return [new RegistryConnectErrorTreeItem(this, err, this.cachedProvider)];
+            }
         }
 
         const url: string = this._nextLink ? this._nextLink : `v2/repositories/namespaces?page_size=${PAGE_SIZE}`;
@@ -66,7 +64,7 @@ export class DockerHubAccountTreeItem extends AzExtParentTreeItem implements IRe
         return this.createTreeItemsWithErrorHandling(
             response.body.namespaces,
             'invalidDockerHubNamespace',
-            n => new DockerHubNamespaceTreeItem(this, n),
+            n => new DockerHubNamespaceTreeItem(this, n.toLowerCase()),
             n => n
         );
     }

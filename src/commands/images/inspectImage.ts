@@ -5,13 +5,18 @@
 
 import { IActionContext, openReadOnlyJson } from "vscode-azureextensionui";
 import { ext } from "../../extensionVariables";
+import { localize } from '../../localize';
 import { ImageTreeItem } from "../../tree/images/ImageTreeItem";
 
 export async function inspectImage(context: IActionContext, node?: ImageTreeItem): Promise<void> {
     if (!node) {
-        node = await ext.imagesTree.showTreeItemPicker<ImageTreeItem>(ImageTreeItem.contextValue, context);
+        await ext.imagesTree.refresh();
+        node = await ext.imagesTree.showTreeItemPicker<ImageTreeItem>(ImageTreeItem.contextValue, {
+            ...context,
+            noItemFoundErrorMessage: localize('vscode-docker.commands.images.inspect.noImages', 'No images are available to inspect')
+        });
     }
 
-    const inspectInfo = await node.getImage().inspect();
+    const inspectInfo = await ext.dockerClient.inspectImage(context, node.imageId);
     await openReadOnlyJson(node, inspectInfo);
 }

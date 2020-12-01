@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ContainerRegistryManagementClient, ContainerRegistryManagementModels as AcrModels } from 'azure-arm-containerregistry';
+import { ContainerRegistryManagementClient, ContainerRegistryManagementModels as AcrModels } from '@azure/arm-containerregistry';
 import { window } from 'vscode';
-import { AzExtTreeItem, AzureWizard, createAzureClient, IActionContext, ICreateChildImplContext, LocationListStep, ResourceGroupListStep, SubscriptionTreeItemBase } from "vscode-azureextensionui";
+import { AzExtParentTreeItem, AzExtTreeItem, AzureWizard, createAzureClient, IActionContext, ICreateChildImplContext, ISubscriptionContext, LocationListStep, ResourceGroupListStep, SubscriptionTreeItemBase } from "vscode-azureextensionui";
+import { localize } from '../../../localize';
 import { nonNullProp } from '../../../utils/nonNull';
 import { ICachedRegistryProvider } from "../ICachedRegistryProvider";
 import { IRegistryProviderTreeItem } from "../IRegistryProviderTreeItem";
@@ -22,8 +23,8 @@ export class SubscriptionTreeItem extends SubscriptionTreeItemBase implements IR
 
     private _nextLink: string | undefined;
 
-    public get cachedProvider(): ICachedRegistryProvider {
-        return this.parent.cachedProvider;
+    public constructor(parent: AzExtParentTreeItem, root: ISubscriptionContext, public readonly cachedProvider: ICachedRegistryProvider) {
+        super(parent, root);
     }
 
     public async loadMoreChildrenImpl(clearCache: boolean, _context: IActionContext): Promise<AzExtTreeItem[]> {
@@ -31,7 +32,8 @@ export class SubscriptionTreeItem extends SubscriptionTreeItemBase implements IR
             this._nextLink = undefined;
         }
 
-        const client: ContainerRegistryManagementClient = createAzureClient(this.root, ContainerRegistryManagementClient);
+        const armContainerRegistry = await import('@azure/arm-containerregistry');
+        const client: ContainerRegistryManagementClient = createAzureClient(this.root, armContainerRegistry.ContainerRegistryManagementClient);
         let registryListResult: AcrModels.RegistryListResult = this._nextLink === undefined ?
             await client.registries.list() :
             await client.registries.listNext(this._nextLink);
@@ -41,7 +43,7 @@ export class SubscriptionTreeItem extends SubscriptionTreeItemBase implements IR
         return await this.createTreeItemsWithErrorHandling(
             registryListResult,
             'invalidAzureRegistry',
-            async r => new AzureRegistryTreeItem(this, r),
+            async r => new AzureRegistryTreeItem(this, this.cachedProvider, r),
             r => r.name
         );
     }
@@ -53,17 +55,19 @@ export class SubscriptionTreeItem extends SubscriptionTreeItemBase implements IR
     public async createChildImpl(context: ICreateChildImplContext): Promise<AzExtTreeItem> {
         const wizardContext: IAzureRegistryWizardContext = { ...context, ...this.root };
 
+        const promptSteps = [
+            new AzureRegistryNameStep(),
+            new AzureRegistrySkuStep(),
+            new ResourceGroupListStep(),
+        ];
+        LocationListStep.addStep(wizardContext, promptSteps);
+
         const wizard = new AzureWizard(wizardContext, {
-            promptSteps: [
-                new AzureRegistryNameStep(),
-                new AzureRegistrySkuStep(),
-                new ResourceGroupListStep(),
-                new LocationListStep()
-            ],
+            promptSteps,
             executeSteps: [
                 new AzureRegistryCreateStep()
             ],
-            title: 'Create new Azure Container Registry'
+            title: localize('vscode-docker.tree.registries.azure.createNew', 'Create new Azure Container Registry')
         });
 
         await wizard.prompt();
@@ -72,7 +76,8 @@ export class SubscriptionTreeItem extends SubscriptionTreeItemBase implements IR
         await wizard.execute();
 
         // don't wait
+        /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
         window.showInformationMessage(`Successfully created registry "${newRegistryName}".`);
-        return new AzureRegistryTreeItem(this, nonNullProp(wizardContext, 'registry'));
+        return new AzureRegistryTreeItem(this, this.cachedProvider, nonNullProp(wizardContext, 'registry'));
     }
 }

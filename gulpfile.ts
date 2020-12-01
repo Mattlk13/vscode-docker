@@ -3,54 +3,72 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// tslint:disable:no-implicit-dependencies
 import * as cp from 'child_process';
-import * as fse from 'fs-extra';
 import * as gulp from 'gulp';
-import * as path from 'path';
-import { gulp_installAzureAccount, gulp_webpack } from 'vscode-azureextensiondev';
+import * as eslint from 'gulp-eslint';
+import * as sourcemaps from 'gulp-sourcemaps';
+import * as ts from 'gulp-typescript';
+import * as vsce from 'vsce';
+import { gulp_webpack } from 'vscode-azureextensiondev';
 
 const env = process.env;
+const tsProject = ts.createProject('./tsconfig.json');
 
-function test(): cp.ChildProcess {
-    env.DEBUGTELEMETRY = '1';
-    env.CODE_TESTS_WORKSPACE = path.join(__dirname, 'test/test.code-workspace');
-    env.MOCHA_timeout = String(10 * 1000);
-    env.CODE_TESTS_PATH = path.join(__dirname, 'dist/test');
-    return spawn('node', ['./node_modules/vscode/bin/test'], { stdio: 'inherit', env });
+function compileTask() {
+    return tsProject.src()
+        .pipe(sourcemaps.init())
+        .pipe(tsProject()).js
+        .pipe(sourcemaps.write('.', { includeContent: false, sourceRoot: './' }))
+        .pipe(gulp.dest(tsProject.options.outDir));
 }
 
-function spawn(command: string, args: string[], options: {}): cp.ChildProcess {
-    if (process.platform === 'win32') {
-        if (fse.pathExistsSync(command + '.exe')) {
-            command = command + '.exe';
-        } else if (fse.pathExistsSync(command + '.cmd')) {
-            command = command + '.cmd';
-        }
-    }
-
-    return cp.spawn(command, args, options);
+function lintTask() {
+    return gulp.src(['src/**/*.ts'])
+        .pipe(eslint())
+        .pipe(eslint.format())
+        .pipe(eslint.failAfterError())
+        .pipe(eslint.results(
+            results => {
+                if (results.warningCount) {
+                    throw new Error('ESLint generated warnings.');
+                }
+            }));
 }
 
-async function sortPackageJson(): Promise<void> {
-    const fsPath = path.join(__dirname, 'package.json');
-    console.log(fsPath);
-    // tslint:disable: no-any no-unsafe-any
-    const packageJson: any = await fse.readJSON(fsPath);
-    packageJson.activationEvents.sort();
-    packageJson.contributes.menus["view/item/context"].sort((a, b) => {
-        if (a.group === b.group) {
-            return a.command.localeCompare(b.command);
-        } else {
-            return a.group.localeCompare(b.group);
-        }
-    });
-    packageJson.contributes.commands.sort((a, b) => a.command.localeCompare(b.command));
-    await fse.writeFile(fsPath, JSON.stringify(packageJson, undefined, 4));
-    // tslint:enable: no-any no-unsafe-any
+function testTaskFactory(unitTestsOnly: boolean) {
+    env.MOCHA_grep = unitTestsOnly ? '\\(unit\\)' : '';
+    return cp.spawn('node', ['./dist/test/runTest.js'], { stdio: 'inherit', env });
 }
 
-exports.sortPackageJson = sortPackageJson;
-exports['webpack-dev'] = () => gulp_webpack('development');
-exports['webpack-prod'] = () => gulp_webpack('production');
-exports.test = gulp.series(gulp_installAzureAccount, test);
+function allTestsTask() {
+    return testTaskFactory(false);
+}
+
+function unitTestsTask() {
+    return testTaskFactory(true);
+}
+
+function webpackDevTask() {
+    return gulp_webpack('development');
+}
+
+function webpackProdTask() {
+    return gulp_webpack('production');
+}
+
+function vscePackageTask() {
+    return vsce.createVSIX();
+}
+
+gulp.task('build', compileTask);
+gulp.task('lint', lintTask);
+gulp.task('package', gulp.series(compileTask, webpackProdTask, vscePackageTask));
+gulp.task('test', gulp.series(compileTask, webpackProdTask, allTestsTask));
+gulp.task('unit-test', gulp.series(compileTask, webpackProdTask, unitTestsTask));
+gulp.task('webpack-dev', gulp.series(compileTask, webpackDevTask));
+gulp.task('webpack-prod', gulp.series(compileTask, webpackProdTask));
+
+gulp.task('ci-build', gulp.series(compileTask, lintTask, webpackProdTask, allTestsTask));
+gulp.task('ci-package', gulp.series('ci-build', vscePackageTask));
+
+gulp.task('test-only', gulp.series(allTestsTask));

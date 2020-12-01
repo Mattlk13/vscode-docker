@@ -3,23 +3,39 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ImageInfo } from "dockerode";
+import { AzExtParentTreeItem, IActionContext } from "vscode-azureextensionui";
+import { DockerImage } from "../../docker/Images";
 import { ext } from "../../extensionVariables";
+import { localize } from '../../localize';
 import { LocalChildGroupType, LocalChildType, LocalRootTreeItemBase } from "../LocalRootTreeItemBase";
 import { CommonGroupBy, groupByNoneProperty } from "../settings/CommonProperties";
 import { ITreeArraySettingInfo, ITreeSettingInfo } from "../settings/ITreeSettingInfo";
+import { OutdatedImageChecker } from "./imageChecker/OutdatedImageChecker";
 import { ImageGroupTreeItem } from './ImageGroupTreeItem';
 import { getImagePropertyValue, imageProperties, ImageProperty } from "./ImageProperties";
 import { ImageTreeItem } from "./ImageTreeItem";
-import { ILocalImageInfo, LocalImageInfo } from "./LocalImageInfo";
 
-export class ImagesTreeItem extends LocalRootTreeItemBase<ILocalImageInfo, ImageProperty> {
+export interface DatedDockerImage extends DockerImage {
+    Outdated?: boolean;
+}
+
+export class ImagesTreeItem extends LocalRootTreeItemBase<DatedDockerImage, ImageProperty> {
+    private readonly outdatedImageChecker: OutdatedImageChecker = new OutdatedImageChecker();
+
+    public constructor(parent?: AzExtParentTreeItem) {
+        super(parent);
+        this.sortBySettingInfo.properties.push({
+            property: 'Size',
+            description: localize('vscode-docker.tree.images.sortBySize', 'Sort by image size')
+        });
+    }
+
     public treePrefix: string = 'images';
-    public label: string = 'Images';
-    public configureExplorerTitle: string = 'Configure images explorer';
+    public label: string = localize('vscode-docker.tree.images.label', 'Images');
+    public configureExplorerTitle: string = localize('vscode-docker.tree.images.configure', 'Configure images explorer');
 
-    public childType: LocalChildType<ILocalImageInfo> = ImageTreeItem;
-    public childGroupType: LocalChildGroupType<ILocalImageInfo, ImageProperty> = ImageGroupTreeItem;
+    public childType: LocalChildType<DatedDockerImage> = ImageTreeItem;
+    public childGroupType: LocalChildGroupType<DatedDockerImage, ImageProperty> = ImageGroupTreeItem;
 
     public labelSettingInfo: ITreeSettingInfo<ImageProperty> = {
         properties: imageProperties,
@@ -32,7 +48,8 @@ export class ImagesTreeItem extends LocalRootTreeItemBase<ILocalImageInfo, Image
     };
 
     public groupBySettingInfo: ITreeSettingInfo<ImageProperty | CommonGroupBy> = {
-        properties: [...imageProperties, groupByNoneProperty],
+        // No grouping by size
+        properties: [...imageProperties.filter(p => p.property !== 'Size'), groupByNoneProperty],
         defaultProperty: 'Repository',
     };
 
@@ -40,44 +57,13 @@ export class ImagesTreeItem extends LocalRootTreeItemBase<ILocalImageInfo, Image
         return this.groupBySetting === 'None' ? 'image' : 'image group';
     }
 
-    public async getItems(): Promise<ILocalImageInfo[]> {
-        const options = {
-            "filters": {
-                "dangling": ["false"]
-            }
-        };
-
-        const images = await ext.dockerode.listImages(options) || [];
-        let result: ILocalImageInfo[] = [];
-        for (const image of images) {
-            if (!image.RepoTags) {
-                result.push(new LocalImageInfo(image, getFullTagFromDigest(image)));
-            } else {
-                for (let fullTag of image.RepoTags) {
-                    result.push(new LocalImageInfo(image, fullTag));
-                }
-            }
-        }
-
+    public async getItems(context: IActionContext): Promise<DatedDockerImage[]> {
+        const result = await ext.dockerClient.getImages(context);
+        this.outdatedImageChecker.markOutdatedImages(result);
         return result;
     }
 
-    public getPropertyValue(item: ILocalImageInfo, property: ImageProperty): string {
+    public getPropertyValue(item: DockerImage, property: ImageProperty): string {
         return getImagePropertyValue(item, property);
     }
-}
-
-function getFullTagFromDigest(image: ImageInfo): string {
-    let repo = '<none>';
-    let tag = '<none>';
-
-    const digest = image.RepoDigests[0];
-    if (digest) {
-        const index = digest.indexOf('@');
-        if (index > 0) {
-            repo = digest.substring(0, index);
-        }
-    }
-
-    return `${repo}:${tag}`;
 }

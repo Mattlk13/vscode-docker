@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzExtParentTreeItem, AzExtTreeItem, AzureWizard, GenericTreeItem, IActionContext, IAzureQuickPickItem, UserCancelledError } from "vscode-azureextensionui";
+import { AzExtParentTreeItem, AzExtTreeItem, AzureWizard, GenericTreeItem, IActionContext, IAzureQuickPickItem, parseError, UserCancelledError } from "vscode-azureextensionui";
 import { ext } from "../../extensionVariables";
-import { openExternal } from "../../utils/openExternal";
+import { localize } from '../../localize';
 import { getThemedIconPath } from "../IconPath";
 import { getRegistryProviders } from "./all/getRegistryProviders";
 import { ConnectedRegistriesTreeItem } from "./ConnectedRegistriesTreeItem";
@@ -17,14 +17,14 @@ import { ICachedRegistryProvider } from "./ICachedRegistryProvider";
 import { IRegistryProvider } from "./IRegistryProvider";
 import { IRegistryProviderTreeItem } from "./IRegistryProviderTreeItem";
 import { anyContextValuePart, contextValueSeparator } from "./registryContextValues";
-import { deleteRegistryPassword, setRegistryPassword } from "./registryPasswords";
+import { RegistryTreeItemBase } from "./RegistryTreeItemBase";
 
 const providersKey = 'docker.registryProviders';
 
 export class RegistriesTreeItem extends AzExtParentTreeItem {
     public static contextValue: string = 'registries';
     public contextValue: string = RegistriesTreeItem.contextValue;
-    public label: string = 'Registries';
+    public label: string = localize('vscode-docker.tree.registries.registriesLabel', 'Registries');
     public childTypeLabel: string = 'registry provider';
     public autoSelectInTreeItemPicker: boolean = true;
     public _connectedRegistriesTreeItem: ConnectedRegistriesTreeItem;
@@ -40,7 +40,7 @@ export class RegistriesTreeItem extends AzExtParentTreeItem {
     public async loadMoreChildrenImpl(_clearCache: boolean, context: IActionContext): Promise<AzExtTreeItem[]> {
         if (this._cachedProviders.length === 0) {
             return [new GenericTreeItem(this, {
-                label: 'Connect Registry...',
+                label: localize('vscode-docker.tree.registries.connectRegistry', 'Connect Registry...'),
                 contextValue: 'connectRegistry',
                 iconPath: getThemedIconPath('connect'),
                 includeInTreeItemPicker: true,
@@ -54,11 +54,11 @@ export class RegistriesTreeItem extends AzExtParentTreeItem {
                 cachedProvider => {
                     const provider = getRegistryProviders().find(rp => rp.id === cachedProvider.id);
                     if (!provider) {
-                        throw new Error(`Failed to find registry provider with id "${cachedProvider.id}".`);
+                        throw new Error(localize('vscode-docker.tree.registries.noProvider', 'Failed to find registry provider with id "{0}".', cachedProvider.id));
                     }
 
                     const parent = provider.isSingleRegistry ? this._connectedRegistriesTreeItem : this;
-                    return this.initTreeItem(new provider.treeItemType(parent, cachedProvider));
+                    return this.initTreeItem(provider.treeItemFactory(parent, cachedProvider));
                 },
                 cachedInfo => cachedInfo.id
             );
@@ -76,7 +76,7 @@ export class RegistriesTreeItem extends AzExtParentTreeItem {
         return false;
     }
 
-    public async connectRegistry(context: IActionContext): Promise<void> {
+    public async connectRegistry(context: IActionContext, provider?: IRegistryProvider, url?: string): Promise<void> {
         let picks: IAzureQuickPickItem<IRegistryProvider | undefined>[] = getRegistryProviders().map(rp => {
             return {
                 label: rp.label,
@@ -86,19 +86,17 @@ export class RegistriesTreeItem extends AzExtParentTreeItem {
             };
         })
         picks = picks.sort((p1, p2) => p1.label.localeCompare(p2.label));
-        picks.push({
-            label: "$(link-external) Don't see your provider? Learn how to contribute...",
-            data: undefined
-        });
 
-        let placeHolder: string = 'Select the provider for your registry';
-        const provider = (await ext.ui.showQuickPick(picks, { placeHolder, suppressPersistence: true })).data;
+        let placeHolder: string = localize('vscode-docker.tree.registries.selectProvider', 'Select the provider for your registry');
+        provider = provider ?? (await ext.ui.showQuickPick(picks, { placeHolder, suppressPersistence: true })).data;
         if (!provider) {
-            await openExternal('https://aka.ms/AA5g7n7');
-            context.telemetry.properties.cancelStep = 'learnHowToContribute';
             throw new UserCancelledError();
         } else if (provider.onlyOneAllowed && this._cachedProviders.find(c => c.id === provider.id)) {
-            throw new Error(`Only one provider with id "${provider.id}" is allowed at a time.`);
+            // Don't wait, no input to wait for anyway
+            /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
+            ext.ui.showWarningMessage(localize('vscode-docker.tree.registries.providerConnected', 'The "{0}" registry provider is already connected.', provider.label));
+            context.telemetry.properties.cancelStep = 'registryProviderAlreadyAdded';
+            throw new UserCancelledError();
         }
 
         context.telemetry.properties.providerId = provider.id;
@@ -111,7 +109,7 @@ export class RegistriesTreeItem extends AzExtParentTreeItem {
 
         if (provider.connectWizardOptions) {
             const existingProviders: ICachedRegistryProvider[] = this._cachedProviders.filter(rp => rp.id === provider.id);
-            const wizardContext: IConnectRegistryWizardContext = { ...context, ...provider.connectWizardOptions, existingProviders };
+            const wizardContext: IConnectRegistryWizardContext = { ...context, ...provider.connectWizardOptions, url, existingProviders };
             const wizard = new AzureWizard(wizardContext, {
                 title: provider.connectWizardOptions.wizardTitle,
                 promptSteps: [
@@ -127,8 +125,8 @@ export class RegistriesTreeItem extends AzExtParentTreeItem {
             cachedProvider.url = wizardContext.url;
             cachedProvider.username = wizardContext.username;
 
-            if (wizardContext.password) {
-                await setRegistryPassword(cachedProvider, wizardContext.password);
+            if (wizardContext.secret && provider.persistAuth) {
+                await provider.persistAuth(cachedProvider, wizardContext.secret);
             }
         }
 
@@ -143,10 +141,10 @@ export class RegistriesTreeItem extends AzExtParentTreeItem {
                 let label: string = (provider && provider.label) || crp.id;
                 let descriptions: string[] = [];
                 if (crp.username) {
-                    descriptions.push(`Username: "${crp.username}"`)
+                    descriptions.push(localize('vscode-docker.tree.registries.usernameDesc', 'Username: "{0}"', crp.username))
                 }
                 if (crp.url) {
-                    descriptions.push(`URL: "${crp.url}"`)
+                    descriptions.push(localize('vscode-docker.tree.registries.urlDesc', 'URL: "{0}"', crp.url))
                 }
                 return {
                     label,
@@ -155,14 +153,25 @@ export class RegistriesTreeItem extends AzExtParentTreeItem {
                     data: crp
                 }
             });
-            const placeHolder: string = 'Select the registry to disconnect';
+            const placeHolder: string = localize('vscode-docker.tree.registries.selectDisconnect', 'Select the registry to disconnect');
             cachedProvider = (await ext.ui.showQuickPick(picks, { placeHolder, suppressPersistence: true })).data;
         }
 
         context.telemetry.properties.providerId = cachedProvider.id;
         context.telemetry.properties.providerApi = cachedProvider.api;
 
-        await deleteRegistryPassword(cachedProvider);
+        // NOTE: Do not let failure prevent removal of the tree item.
+
+        try {
+            const provider = getRegistryProviders().find(rp => rp.id === cachedProvider.id);
+            if (provider?.removeAuth) {
+                await provider.removeAuth(cachedProvider);
+            }
+        } catch (err) {
+            // Don't wait, no input to wait for anyway
+            /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
+            ext.ui.showWarningMessage(localize('vscode-docker.tree.registries.disconnectError', 'The registry password could not be removed from the cache: {0}', parseError(err).message));
+        }
 
         const index = this._cachedProviders.findIndex(n => n === cachedProvider);
         if (index !== -1) {
@@ -174,6 +183,10 @@ export class RegistriesTreeItem extends AzExtParentTreeItem {
 
     public hasMultiplesOfProvider(cachedProvider: ICachedRegistryProvider): boolean {
         return this._cachedProviders.filter(c => c.id === cachedProvider.id).length > 1;
+    }
+
+    public async getAllConnectedRegistries(context: IActionContext): Promise<RegistryTreeItemBase[]> {
+        return await recursiveGetAllConnectedRegistries(context, ext.registriesRoot);
     }
 
     private async saveCachedProviders(): Promise<void> {
@@ -205,4 +218,18 @@ export class RegistriesTreeItem extends AzExtParentTreeItem {
 
         return node
     }
+}
+
+async function recursiveGetAllConnectedRegistries(context: IActionContext, node: AzExtParentTreeItem): Promise<RegistryTreeItemBase[]> {
+    let results: RegistryTreeItemBase[] = [];
+
+    for (const child of await node.getCachedChildren(context)) {
+        if (child instanceof RegistryTreeItemBase) {
+            results.push(child);
+        } else if (child instanceof AzExtParentTreeItem) {
+            results = results.concat(await recursiveGetAllConnectedRegistries(context, child));
+        }
+    }
+
+    return results;
 }

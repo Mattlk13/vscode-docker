@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ContainerRegistryManagementModels as AcrModels } from "azure-arm-containerregistry";
+import { ContainerRegistryManagementModels as AcrModels } from "@azure/arm-containerregistry";
 import { window } from "vscode";
 import { IActionContext } from "vscode-azureextensionui";
 import { ext } from "../../../../extensionVariables";
+import { localize } from "../../../../localize";
 import { AzureTaskTreeItem } from "../../../../tree/registries/azure/AzureTaskTreeItem";
 
 export async function runAzureTask(context: IActionContext, node?: AzureTaskTreeItem): Promise<void> {
@@ -15,9 +16,10 @@ export async function runAzureTask(context: IActionContext, node?: AzureTaskTree
     }
 
     const registryTI = node.parent.parent;
-    let runRequest: AcrModels.TaskRunRequest = { type: 'TaskRunRequest', taskName: node.taskName };
-    let run = await registryTI.client.registries.scheduleRun(registryTI.resourceGroup, registryTI.registryName, runRequest);
+    let runRequest: AcrModels.TaskRunRequest = { type: 'TaskRunRequest', taskId: node.id };
+    let run = await (await registryTI.getClient()).registries.scheduleRun(registryTI.resourceGroup, registryTI.registryName, runRequest);
     await node.parent.refresh();
     // don't wait
-    window.showInformationMessage(`Successfully scheduled run "${run.runId}" for task "${node.taskName}".`);
+    /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
+    window.showInformationMessage(localize('vscode-docker.commands.registries.azure.tasks.runTaskScheduled', 'Successfully scheduled run "{0}" for task "{1}".', run.runId, node.taskName));
 }

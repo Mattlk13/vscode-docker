@@ -1,3 +1,212 @@
+## 1.8.1 - 23 November 2020
+### Fixed
+* This update fixes an issue that prevented debugging Python applications in Docker containers. The latest version of the [Python extension](https://marketplace.visualstudio.com/items?itemName=ms-python.python) is also required. [#2455](https://github.com/microsoft/vscode-docker/issues/2455)
+* Fixed an issue where the logo was hard to see in the [extension gallery page](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-docker) in the browser. [#2499](https://github.com/microsoft/vscode-docker/issues/2499)
+
+## 1.8.0 - 16 November 2020
+### Added
+* Added a read-only file explorer for running containers, this can be seen in the Docker Explorer tab. [#2333](https://github.com/microsoft/vscode-docker/issues/2333)
+* In ACI contexts, volumes are now visible. [#2315](https://github.com/microsoft/vscode-docker/issues/2315)
+* A start page will now open on install / upgrade with some pointers on where to begin. The automatic opening can be disabled with a checkbox on the page. [#1895](https://github.com/microsoft/vscode-docker/issues/1895)
+* New extension icon! [#2475](https://github.com/microsoft/vscode-docker/pull/2475)
+
+### Fixed
+* Activation performance has been improved. [#2371](https://github.com/microsoft/vscode-docker/issues/2371)
+* .NET Core image names below 5.0 can now be pulled without `/core`. The scaffolding code has been updated to reflect this. [#2429](https://github.com/microsoft/vscode-docker/issues/2429)
+* Output looked bad for BuildKit builds. [#2451](https://github.com/microsoft/vscode-docker/issues/2451)
+
+### Removed
+* UI mode has been removed for the purposes of remoting, but it can be manually re-enabled. This change significantly improves the user experience when using remote features. [#2356](https://github.com/microsoft/vscode-docker/issues/2356)
+
+## 1.7.0 - 19 October 2020
+### Added
+* The containers view is now grouped by compose project by default. This can be changed by settings. [#2324](https://github.com/microsoft/vscode-docker/issues/2324)
+* On compose project grouping nodes, the commands "Compose Down" and "Compose Restart" can be used from context menu. [#2304](https://github.com/microsoft/vscode-docker/issues/2304)
+* A `docker.context` setting is added, similar to `docker.host`, used for controlling the `DOCKER_CONTEXT` environment variable. [#2264](https://github.com/microsoft/vscode-docker/issues/2264)
+* The checking for outdated images now applies to images from Microsoft Container Registry (MCR), including .NET and ASP.NET images. [#2165](https://github.com/microsoft/vscode-docker/issues/2165)
+* The `docker-build` and `docker-run` tasks now have a `customOptions` flag, which can be used to add any arbitrary command line parameters to the `docker build` and `docker run` commands, respectively. [#2259](https://github.com/microsoft/vscode-docker/issues/2259), [#2271](https://github.com/microsoft/vscode-docker/issues/2271)
+
+### Fixed
+* The outdated image checking feature now will run at most once per day in order to conserve rate limits. The feature remains disabled by default but can be enabled in settings, with `docker.images.checkForOutdatedImages`. [#2272](https://github.com/microsoft/vscode-docker/issues/2272)
+* Fixed an issue with Django project debugging not working on Linux. [#2313](https://github.com/microsoft/vscode-docker/issues/2313)
+* Support for environment variables (like `${env:HOME}`) in launch configurations has been added. In general, any [variables](https://code.visualstudio.com/docs/editor/variables-reference) VS Code supports should work. [#1961](https://github.com/microsoft/vscode-docker/issues/1961)
+* Node.js applications in subfolders should now be scaffolded correctly for building and debugging in Docker. [#2057](https://github.com/microsoft/vscode-docker/issues/2057)
+
+### Removed
+* The deprecated `docker-coreclr` debug configuration has been removed. It is replaced by the [`docker` debug configuration](https://code.visualstudio.com/docs/containers/debug-common). [#2197](https://github.com/microsoft/vscode-docker/issues/2197)
+
+## 1.6.0 - 15 September 2020
+### Added
+* Deployments to Azure Container Instances can be made directly from images in Docker Hub and Azure Container Registries in the Registries view. [#1718](https://github.com/microsoft/vscode-docker/issues/1718)
+* ACI containers can now be stopped and started from the Explorer view. [#2265](https://github.com/microsoft/vscode-docker/pull/2265)
+* Templates for scaffolding can be provided with the new `docker.scaffolding.templatePath` setting. [#1617](https://github.com/microsoft/vscode-docker/issues/1617)
+* The scaffolding experience is now a wizard, which has improved UX. [#1642](https://github.com/microsoft/vscode-docker/issues/1642)
+
+### Changed
+* The outdated image check feature has been turned off by default. It can still be turned on in settings but may result in rate limiting from Docker Hub. For more information see [#2272](https://github.com/microsoft/vscode-docker/issues/2272).
+
+### Removed
+* The command `vscode-docker.api.configure` has been removed. The command `vscode-docker.configure` can still be used to programmatically scaffold Dockerfiles. [#2267](https://github.com/microsoft/vscode-docker/pull/2267)
+
+## 1.5.0 - 17 August 2020
+### Added
+* The applicable Docker context types can be set on customized commands. [#2168](https://github.com/microsoft/vscode-docker/issues/2168)
+* Image size has been added in the Explorer view as an optional property for labels and sorting. [#2047](https://github.com/microsoft/vscode-docker/issues/2047)
+
+### Fixed
+* Terminal windows will be reused, instead of opening a new terminal window every time. [#251](https://github.com/microsoft/vscode-docker/issues/251)
+* The recommended exec form of CMD directives is now used wherever possible. [#2090](https://github.com/microsoft/vscode-docker/issues/2090)
+* Debugging no longer stops on hot reload in Python. [#2148](https://github.com/microsoft/vscode-docker/issues/2148)
+* Grouping containers by networks used is not working [#2185](https://github.com/microsoft/vscode-docker/issues/2185)
+* Activation errors due to filesystem permissions [#2204](https://github.com/microsoft/vscode-docker/issues/2204)
+* Prompt to copy debugger into container shows up repeatedly [#2186](https://github.com/microsoft/vscode-docker/issues/2186)
+* Allow logging to container registries without gnome-keyring installed [#722](https://github.com/microsoft/vscode-docker/issues/722)
+
+### Removed
+* The `docker.attachShellCommand.Windows` and `docker.attachShellCommand.Linux` settings have been removed. [Command customization](https://code.visualstudio.com/docs/containers/reference#_command-customization) replaces this functionality.
+
+## 1.4.1 - 22 July 2020
+### Fixed
+* "Permission denied" issue during extension activation. [#2181](https://github.com/microsoft/vscode-docker/issues/2181)
+
+## 1.4.0 - 22 July 2020
+### Added
+* Support for Azure Container Instances Docker contexts. [#2102](https://github.com/microsoft/vscode-docker/issues/2102)
+* ACI contexts can be created from the command palette or contexts view. [#2114](https://github.com/microsoft/vscode-docker/issues/2114)
+* Outdated base images are now flagged with a warning icon. The base image must be in the root namespace in Docker Hub (i.e. docker.io/library). This feature is on by default but can be disabled via the `docker.images.checkForOutdatedImages` setting. [#1493](https://github.com/microsoft/vscode-docker/issues/1493)
+
+### Fixed
+* Python debugging launcher now uses `python3` instead of `python`, to ensure Python 3.* is always run. [#2123](https://github.com/microsoft/vscode-docker/issues/2123)
+* "Cannot read property 'filter' of null" during some commands. [#2030](https://github.com/microsoft/vscode-docker/issues/2030), [#2072](https://github.com/microsoft/vscode-docker/issues/2072), [#2108](https://github.com/microsoft/vscode-docker/issues/2108)
+* Node.js and Python debug configurations did not pass along all parameters. [#2024](https://github.com/microsoft/vscode-docker/issues/2024)
+* Fixed a few Dockerfile language server issues. [#2043](https://github.com/microsoft/vscode-docker/issues/2043), [#2055](https://github.com/microsoft/vscode-docker/issues/2055)
+* Login failure for Azure Container Registries. [#1959](https://github.com/microsoft/vscode-docker/issues/1959)
+
+## 1.3.1 - 18 June 2020
+### Fixed
+* Python debugging fails with message "Unable to find the debugger in the Python extension" due to new debugger location. [#2080](https://github.com/microsoft/vscode-docker/issues/2080)
+
+## 1.3.0 - 15 June 2020
+### Added
+* .NET Core attach support added for Windows containers. [#1662](https://github.com/microsoft/vscode-docker/issues/1662)
+
+### Fixed
+* Explorer no longer needs to be opened for palette commands to work. [#2029](https://github.com/microsoft/vscode-docker/issues/2029)
+* Node base image scaffolded has been updated to latest LTS. [#2037](https://github.com/microsoft/vscode-docker/pull/2037)
+* Python debugging now uses debugpy instead of ptvsd, fixing several issues and improving reliability. [#1831](https://github.com/microsoft/vscode-docker/issues/1831), [#1879](https://github.com/microsoft/vscode-docker/issues/1879)
+* A custom `docker-compose up` command with no match no longer produces incorrect commands. [#1954](https://github.com/microsoft/vscode-docker/issues/1954)
+* Explorer is more responsive when trying to connect to an unreachable SSH host. [#1947](https://github.com/microsoft/vscode-docker/issues/1947)
+
+### Deprecated
+* The `docker.attachShellCommand.Windows` and `docker.attachShellCommand.Linux` settings have been deprecated and will be removed in the future. [Command customization](https://code.visualstudio.com/docs/containers/reference#_command-customization) replaces this functionality. [#1980](https://github.com/microsoft/vscode-docker/issues/1980)
+* The `docker-coreclr` launch configuration has been deprecated and will be removed in the future. [The `docker` configuration replaces this](https://code.visualstudio.com/docs/containers/debug-common). [#1380](https://github.com/microsoft/vscode-docker/issues/1380)
+
+## 1.2.1 - 26 May 2020
+### Fixed
+* When changing contexts, UI is more responsive and clear. [#1965](https://github.com/microsoft/vscode-docker/issues/1965)
+* .NET 5 images are published in a new repository. [#1973](https://github.com/microsoft/vscode-docker/issues/1973)
+
+## 1.2.0 - 11 May 2020
+Requires Visual Studio Code 1.44 or higher.
+
+### Added
+* Semantic highlighting support. [#1840](https://github.com/microsoft/vscode-docker/issues/1840)
+* Help and Feedback pane in explorer view. [#1893](https://github.com/microsoft/vscode-docker/issues/1893)
+* Docker Context pane in explorer view. [#1844](https://github.com/microsoft/vscode-docker/issues/1844)
+* Images can be pulled from the images list. [#1313](https://github.com/microsoft/vscode-docker/issues/1313)
+* Containers can be grouped by docker-compose project name. [#215](https://github.com/microsoft/vscode-docker/issues/215), [#1846](https://github.com/microsoft/vscode-docker/issues/1846)
+* A new setting, `docker.dockerodeOptions`, allowing any options to be provided to Dockerode. [#1459](https://github.com/microsoft/vscode-docker/issues/1459)
+
+### Changed
+* Any file named `Dockerfile.*` is now recognized as a Dockerfile. [#1907](https://github.com/microsoft/vscode-docker/issues/1907)
+
+## 1.1.0 - 20 April 2020
+### Added
+* Custom file names for docker-compose files can be defined. [#102](https://github.com/microsoft/vscode-docker/issues/102)
+* The experience for pushing Docker images has been revamped. [#351](https://github.com/microsoft/vscode-docker/issues/351), [#1539](https://github.com/microsoft/vscode-docker/issues/1539), [#1595](https://github.com/microsoft/vscode-docker/issues/1595)
+* Extensibility model for registry providers has been improved. [#147](https://github.com/microsoft/vscode-docker/issues/147)
+* Generic DockerV2 registries using OAuth can now be connected to in many cases. [#869](https://github.com/microsoft/vscode-docker/issues/869)
+* Docker contexts can now be changed, inspected, and removed from the Command Palette. [#1784](https://github.com/microsoft/vscode-docker/issues/1784)
+* If the Docker context is changed from outside VSCode, the changes will be picked up in VSCode within 20 seconds by default, configurable with the `docker.contextRefreshInterval` setting. If the Docker context is changed within VSCode it is picked up immediately. [#1790](https://github.com/microsoft/vscode-docker/pull/1790)
+
+### Fixed
+* Improved extension activation performance. [#1804](https://github.com/microsoft/vscode-docker/issues/1804)
+* Images are deleted by name instead of ID, which resolves several issues. [#1529](https://github.com/microsoft/vscode-docker/issues/1529)
+* Error "Task to execute is undefined" when doing Docker build. [#1647](https://github.com/microsoft/vscode-docker/issues/1647)
+* .NET Core scaffolding will use assembly name in ENTRYPOINT [#1583](https://github.com/microsoft/vscode-docker/issues/1583)
+
+### Removed
+* The `docker.defaultRegistryPath` setting has been removed, as part of the new image push experience.
+
+## 1.0.0 - 9 March 2020
+### Added
+* Debugging support for Python [#1255](https://github.com/microsoft/vscode-docker/issues/1255)
+* Improved support for common Python frameworks (e.g. Django, Flask, etc.) [#1546](https://github.com/microsoft/vscode-docker/issues/1546)
+* Multi-select support in Docker explorer, including multi-select for some commands [#331](https://github.com/microsoft/vscode-docker/issues/331)
+* Ability to right-click and re-enter incorrect registry credentials [#1122](https://github.com/microsoft/vscode-docker/issues/1122)
+* Most command lines can be fully customized [#1596](https://github.com/microsoft/vscode-docker/issues/1596) (and more)
+* docker-compose support for .NET Core, including attach config [#1543](https://github.com/microsoft/vscode-docker/issues/1543)
+* Changes to selection logic of `docker-compose.yml` files [#370](https://github.com/microsoft/vscode-docker/issues/370) [#379](https://github.com/microsoft/vscode-docker/issues/379) [#569](https://github.com/microsoft/vscode-docker/issues/569)
+
+### Fixed
+* Incorrect `WORKDIR paths should be absolute` message [#1492](https://github.com/microsoft/vscode-docker/issues/1492)
+* README not showing images in gallery [#1654](https://github.com/microsoft/vscode-docker/issues/1654)
+
+## 0.10.0 - 23 January 2020
+### Added
+* Better error handling in command execution [#1398](https://github.com/microsoft/vscode-docker/issues/1398), [#1528](https://github.com/microsoft/vscode-docker/issues/1528)
+* Place Dockerfile next to project file for .NET projects [#592](https://github.com/microsoft/vscode-docker/issues/592)
+* Use container name in shell label [#1463](https://github.com/microsoft/vscode-docker/issues/1463)
+* Auto Refresh Azure Registry node after installing Azure Account extension [#1461](https://github.com/microsoft/vscode-docker/issues/1461)
+* Show only the applicable container groups in container command execution using command palette [#1430](https://github.com/microsoft/vscode-docker/issues/1430)
+* `Copy Full Tag` command added to image context menu and command palette [#1431](https://github.com/microsoft/vscode-docker/issues/1431)
+* pull latest image during docker build [#1409](https://github.com/microsoft/vscode-docker/issues/1409)
+
+### Fixed
+* Port validation during scaffolding [#1510](https://github.com/microsoft/vscode-docker/issues/1510)
+* Use the default registry value in `Docker push` [#1478](https://github.com/microsoft/vscode-docker/issues/1478)
+* Various other fixes and improvements: https://github.com/microsoft/vscode-docker/issues?q=is%3Aissue+milestone%3A0.10.0+is%3Aclosed
+
+## 0.9.0 - 15 November 2019
+### Added
+* Task-based debugging for .NET Core and Node.js: [#1242](https://github.com/microsoft/vscode-docker/issues/1242)
+  * These tasks can also be used for generic `docker build` and `docker run` scenarios
+* Support for connecting to remote Docker daemons over SSH: [#646](https://github.com/microsoft/vscode-docker/issues/646)
+* When using Docker Desktop WSL 2, the WSL daemon or local daemon will be selected automatically, based on `docker context` [#1199](https://github.com/microsoft/vscode-docker/issues/1199)
+* `Open in Browser` command added to container context menus [#1429](https://github.com/microsoft/vscode-docker/pull/1429)
+
+### Removed
+* `docker.importCertificates` has been removed; the functionality to trust system certificates is now built in to VS Code itself (enabled by default): https://github.com/microsoft/vscode/issues/52880
+
+### Fixed
+* Blazor apps using static web assets were not able to be debugged [#1275](https://github.com/microsoft/vscode-docker/issues/1275)
+* Various other fixes and improvements: https://github.com/microsoft/vscode-docker/milestone/13?closed=1
+
+## 0.8.2 - 25 October 2019
+### Added
+* More pattern matches for Dockerfiles (Dockerfile.debug, Dockerfile.dev, Dockerfile.develop, Dockerfile.prod)
+* Button to create simple networks [#1322](https://github.com/microsoft/vscode-docker/issues/1322)
+* Survey prompt for some active users
+* Telemetry event for when Dockerfiles are edited using Docker extension features
+
+### Fixed
+* Will not refresh Explorer window if VSCode is not in focus [#1351](https://github.com/microsoft/vscode-docker/issues/1351)
+
+## 0.8.1 - 13 September 2019
+### Fixed
+* Creating and deploying to a webapp with name containing hyphen (for eg. "abc-xyz") breaks webhook creation. [#1270](https://github.com/Microsoft/vscode-docker/issues/1270)
+
+## 0.8.0 - 12 September 2019
+### Added
+* Changed default behavior in VS Code remote environments to run as a "workspace" extension instead of a "UI" extension. See [#954](https://github.com/Microsoft/vscode-docker/issues/954) for more information
+* Added support to debug ASP.NET Core web apps with SSL enabled
+* Added support to debug .NET Core apps with user secrets
+* Updated icons to match latest VS Code guidelines
+* Automatically create a webhook when deploying an image to Azure App Service
+
+### Fixed
+* [Bugs fixed](https://github.com/Microsoft/vscode-docker/issues?q=is%3Aissue+milestone%3A%220.8.0%22+is%3Aclosed)
+
 ## 0.7.0 - 9 July 2019
 ### Added
 * Revamped Docker Explorer

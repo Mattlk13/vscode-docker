@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ContainerRegistryManagementModels as AcrModels } from "azure-arm-containerregistry";
+import { ContainerRegistryManagementModels as AcrModels } from "@azure/arm-containerregistry";
 import { AzExtParentTreeItem, AzExtTreeItem, IActionContext } from "vscode-azureextensionui";
-import { getThemedIconPath, IconPath } from "../../IconPath";
+import { localize } from '../../../localize';
+import { getThemedIconPath } from "../../IconPath";
 import { OpenUrlTreeItem } from "../../OpenUrlTreeItem";
 import { AzureRegistryTreeItem } from "./AzureRegistryTreeItem";
 import { AzureTaskTreeItem } from "./AzureTaskTreeItem";
@@ -21,10 +22,7 @@ export class AzureTasksTreeItem extends AzExtParentTreeItem {
 
     public constructor(parent: AzureRegistryTreeItem) {
         super(parent);
-    }
-
-    public get iconPath(): IconPath {
-        return getThemedIconPath('tasks');
+        this.iconPath = getThemedIconPath('tasks');
     }
 
     public async loadMoreChildrenImpl(clearCache: boolean, _context: IActionContext): Promise<AzExtTreeItem[]> {
@@ -35,13 +33,13 @@ export class AzureTasksTreeItem extends AzExtParentTreeItem {
         const registryTI = this.parent;
 
         let taskListResult: AcrModels.TaskListResult = this._nextLink === undefined ?
-            await registryTI.client.tasks.list(registryTI.resourceGroup, registryTI.registryName) :
-            await registryTI.client.tasks.listNext(this._nextLink);
+            await (await registryTI.getClient()).tasks.list(registryTI.resourceGroup, registryTI.registryName) :
+            await (await registryTI.getClient()).tasks.listNext(this._nextLink);
 
         this._nextLink = taskListResult.nextLink;
 
         if (clearCache && taskListResult.length === 0) {
-            return [new OpenUrlTreeItem(this, 'Learn how to create a build task...', 'https://aka.ms/acr/task')]
+            return [new OpenUrlTreeItem(this, localize('vscode-docker.tree.registries.azure.learnBuildTask', 'Learn how to create a build task...'), 'https://aka.ms/acr/task')]
         } else {
             let result: AzExtTreeItem[] = await this.createTreeItemsWithErrorHandling(
                 taskListResult,

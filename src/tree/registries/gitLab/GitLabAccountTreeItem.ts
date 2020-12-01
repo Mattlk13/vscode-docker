@@ -9,9 +9,10 @@ import { PAGE_SIZE } from "../../../constants";
 import { ext } from "../../../extensionVariables";
 import { nonNullProp } from "../../../utils/nonNull";
 import { getNextLinkFromHeaders, registryRequest } from "../../../utils/registryRequestUtils";
-import { getIconPath, IconPath } from "../../IconPath";
+import { getIconPath } from "../../IconPath";
 import { ICachedRegistryProvider } from "../ICachedRegistryProvider";
 import { IRegistryProviderTreeItem } from "../IRegistryProviderTreeItem";
+import { RegistryConnectErrorTreeItem } from "../RegistryConnectErrorTreeItem";
 import { getRegistryContextValue, registryProviderSuffix } from "../registryContextValues";
 import { getRegistryPassword } from "../registryPasswords";
 import { GitLabProjectTreeItem } from "./GitLabProjectTreeItem";
@@ -28,22 +29,13 @@ export class GitLabAccountTreeItem extends AzExtParentTreeItem implements IRegis
     public constructor(parent: AzExtParentTreeItem, provider: ICachedRegistryProvider) {
         super(parent);
         this.cachedProvider = provider;
+        this.id = this.cachedProvider.id + this.username;
+        this.iconPath = getIconPath('gitLab');
+        this.description = ext.registriesRoot.hasMultiplesOfProvider(this.cachedProvider) ? this.username : undefined;
     }
 
     public get contextValue(): string {
         return getRegistryContextValue(this, registryProviderSuffix);
-    }
-
-    public get description(): string | undefined {
-        return ext.registriesRoot.hasMultiplesOfProvider(this.cachedProvider) ? this.username : undefined;
-    }
-
-    public get iconPath(): IconPath {
-        return getIconPath('gitLab');
-    }
-
-    public get id(): string {
-        return this.cachedProvider.id + this.username;
     }
 
     public get username(): string {
@@ -57,7 +49,13 @@ export class GitLabAccountTreeItem extends AzExtParentTreeItem implements IRegis
     public async loadMoreChildrenImpl(clearCache: boolean, _context: IActionContext): Promise<AzExtTreeItem[]> {
         if (clearCache) {
             this._nextLink = undefined;
-            await this.refreshToken();
+
+            try {
+                await this.refreshToken();
+            } catch (err) {
+                // If creds are invalid, the above refreshToken will fail
+                return [new RegistryConnectErrorTreeItem(this, err, this.cachedProvider)];
+            }
         }
 
         const url: string = this._nextLink || `api/v4/projects?per_page=${PAGE_SIZE}&simple=true&membership=true`;
@@ -66,7 +64,7 @@ export class GitLabAccountTreeItem extends AzExtParentTreeItem implements IRegis
         return this.createTreeItemsWithErrorHandling(
             response.body,
             'invalidGitLabProject',
-            n => new GitLabProjectTreeItem(this, n.id.toString(), n.path_with_namespace),
+            n => new GitLabProjectTreeItem(this, n.id.toString(), n.path_with_namespace.toLowerCase()),
             n => n.path_with_namespace
         );
     }
@@ -87,6 +85,7 @@ export class GitLabAccountTreeItem extends AzExtParentTreeItem implements IRegis
         this._token = undefined;
         const options = {
             form: {
+                /* eslint-disable-next-line camelcase */
                 grant_type: "password",
                 username: this.username,
                 password: await this.getPassword()
@@ -100,9 +99,11 @@ export class GitLabAccountTreeItem extends AzExtParentTreeItem implements IRegis
 
 interface IProject {
     id: number;
+    /* eslint-disable-next-line camelcase */
     path_with_namespace: string;
 }
 
 interface IToken {
+    /* eslint-disable-next-line camelcase */
     access_token: string
 }

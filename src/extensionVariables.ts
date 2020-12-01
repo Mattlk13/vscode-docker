@@ -3,21 +3,18 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as Dockerode from 'dockerode';
-import * as osNode from 'os';
-import { RequestAPI, RequiredUriUrl } from 'request';
-import { RequestPromise, RequestPromiseOptions } from 'request-promise-native';
-import { ExtensionContext, OutputChannel, TreeView } from "vscode";
-import { AzExtTreeDataProvider, AzExtTreeItem, IAzureUserInput, ITelemetryReporter } from "vscode-azureextensionui";
+import { ExtensionContext, TreeView } from "vscode";
+import { AzExtTreeDataProvider, AzExtTreeItem, IAzExtOutputChannel, IAzureUserInput, IExperimentationServiceAdapter } from "vscode-azureextensionui";
+import { ContextManager } from './docker/ContextManager';
+import { DockerApiClient } from './docker/DockerApiClient';
+import { IActivityMeasurementService } from './telemetry/ActivityMeasurementService';
 import { ContainersTreeItem } from './tree/containers/ContainersTreeItem';
+import { ContextsTreeItem } from './tree/contexts/ContextsTreeItem';
 import { ImagesTreeItem } from './tree/images/ImagesTreeItem';
 import { NetworksTreeItem } from './tree/networks/NetworksTreeItem';
 import { RegistriesTreeItem } from './tree/registries/RegistriesTreeItem';
 import { VolumesTreeItem } from './tree/volumes/VolumesTreeItem';
 import { IKeytar } from './utils/keytar';
-import { ITerminalProvider } from "./utils/TerminalProvider";
-
-type requestPromise = RequestAPI<RequestPromise, RequestPromiseOptions, RequiredUriUrl>;
 
 /**
  * Namespace for common variables used throughout the extension. They must be initialized in the activate() method of extension.ts
@@ -25,13 +22,17 @@ type requestPromise = RequestAPI<RequestPromise, RequestPromiseOptions, Required
 // tslint:disable-next-line: export-name
 export namespace ext {
     export let context: ExtensionContext;
-    export let outputChannel: OutputChannel;
+    export let outputChannel: IAzExtOutputChannel;
     export let ui: IAzureUserInput;
-    export let reporter: ITelemetryReporter;
-    export let terminalProvider: ITerminalProvider;
+
+    export let telemetryOptIn: boolean;
+    export let experimentationService: IExperimentationServiceAdapter;
+    export let activityMeasurementService: IActivityMeasurementService;
+
     export let keytar: IKeytar | undefined;
-    export let dockerode: Dockerode;
-    export let dockerodeInitError: unknown;
+    export let dockerContextManager: ContextManager;
+    export let dockerClient: DockerApiClient;
+    export let treeInitError: unknown;
     export const ignoreBundle = !/^(false|0)?$/i.test(process.env.AZCODE_DOCKER_IGNORE_BUNDLE || '');
 
     export let imagesTree: AzExtTreeDataProvider;
@@ -46,6 +47,8 @@ export namespace ext {
     export let networksTreeView: TreeView<AzExtTreeItem>;
     export let networksRoot: NetworksTreeItem;
 
+    export const prefix: string = 'docker';
+
     export let registriesTree: AzExtTreeDataProvider;
     export let registriesTreeView: TreeView<AzExtTreeItem>;
     export let registriesRoot: RegistriesTreeItem;
@@ -54,16 +57,9 @@ export namespace ext {
     export let volumesTreeView: TreeView<AzExtTreeItem>;
     export let volumesRoot: VolumesTreeItem;
 
-    /**
-     * A version of 'request-promise' which should be used for all direct request calls (it has the user agent set up properly)
-     */
-    export let request: requestPromise;
+    export let contextsTree: AzExtTreeDataProvider;
+    export let contextsTreeView: TreeView<AzExtTreeItem>;
+    export let contextsRoot: ContextsTreeItem;
 
-    /**
-     * A test-injectable structure defining the current operating system and version
-     */
-    export let os = {
-        platform: osNode.platform(),
-        release: osNode.release()
-    };
+    export let runningTests: boolean = false;
 }

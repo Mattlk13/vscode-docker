@@ -5,14 +5,18 @@
 
 import { IActionContext, openReadOnlyJson } from "vscode-azureextensionui";
 import { ext } from "../../extensionVariables";
+import { localize } from '../../localize';
 import { NetworkTreeItem } from "../../tree/networks/NetworkTreeItem";
 
 export async function inspectNetwork(context: IActionContext, node?: NetworkTreeItem): Promise<void> {
     if (!node) {
-        node = await ext.networksTree.showTreeItemPicker<NetworkTreeItem>(NetworkTreeItem.contextValue, context);
+        await ext.networksTree.refresh();
+        node = await ext.networksTree.showTreeItemPicker<NetworkTreeItem>(NetworkTreeItem.allContextRegExp, {
+            ...context,
+            noItemFoundErrorMessage: localize('vscode-docker.commands.networks.inspect.noNetworks', 'No networks are available to inspect')
+        });
     }
 
-    // tslint:disable-next-line: no-unsafe-any
-    const inspectInfo: {} = await node.getNetwork().inspect(); // inspect is missing type in @types/dockerode
+    const inspectInfo = await ext.dockerClient.inspectNetwork(context, node.networkId);
     await openReadOnlyJson(node, inspectInfo);
 }

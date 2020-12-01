@@ -4,32 +4,32 @@
  *--------------------------------------------------------------------------------------------*/
 
 import vscode = require('vscode');
-import { IActionContext, UserCancelledError } from 'vscode-azureextensionui';
+import { IActionContext } from 'vscode-azureextensionui';
 import { ext } from '../../extensionVariables';
+import { localize } from "../../localize";
 import { VolumeTreeItem } from '../../tree/volumes/VolumeTreeItem';
+import { multiSelectNodes } from '../../utils/multiSelectNodes';
 
-export async function removeVolume(context: IActionContext, node: VolumeTreeItem | undefined): Promise<void> {
-    let nodes: VolumeTreeItem[] = [];
-    if (node) {
-        nodes = [node];
-    } else {
-        nodes = await ext.volumesTree.showTreeItemPicker<VolumeTreeItem>(VolumeTreeItem.contextValue, { ...context, canPickMany: true, suppressCreatePick: true });
-    }
+export async function removeVolume(context: IActionContext, node?: VolumeTreeItem, nodes?: VolumeTreeItem[]): Promise<void> {
+    nodes = await multiSelectNodes(
+        { ...context, suppressCreatePick: true, noItemFoundErrorMessage: localize('vscode-docker.commands.volumes.remove.noVolumes', 'No volumes are available to remove') },
+        ext.volumesTree,
+        VolumeTreeItem.contextValue,
+        node,
+        nodes
+    );
 
     let confirmRemove: string;
-    if (nodes.length === 0) {
-        throw new UserCancelledError();
-    } else if (nodes.length === 1) {
-        node = nodes[0];
-        confirmRemove = `Are you sure you want to remove volume "${node.label}"?`;
+    if (nodes.length === 1) {
+        confirmRemove = localize('vscode-docker.commands.volumes.remove.confirmSingle', 'Are you sure you want to remove volume "{0}"?', nodes[0].label);
     } else {
-        confirmRemove = "Are you sure you want to remove selected volumes?";
+        confirmRemove = localize('vscode-docker.commands.volumes.remove.confirmMulti', 'Are you sure you want to remove selected volumes?');
     }
 
     // no need to check result - cancel will throw a UserCancelledError
-    await ext.ui.showWarningMessage(confirmRemove, { modal: true }, { title: 'Remove' });
+    await ext.ui.showWarningMessage(confirmRemove, { modal: true }, { title: localize('vscode-docker.commands.volumes.remove.remove', 'Remove') });
 
-    let removing: string = "Removing volume(s)...";
+    let removing: string = localize('vscode-docker.commands.volumes.remove.removing', 'Removing volume(s)...');
     await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: removing }, async () => {
         await Promise.all(nodes.map(async n => await n.deleteTreeItem(context)));
     });

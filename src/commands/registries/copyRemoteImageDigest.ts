@@ -6,6 +6,7 @@
 import * as vscode from "vscode";
 import { IActionContext } from "vscode-azureextensionui";
 import { ext } from "../../extensionVariables";
+import { localize } from "../../localize";
 import { AzureTaskRunTreeItem } from "../../tree/registries/azure/AzureTaskRunTreeItem";
 import { DockerV2TagTreeItem } from "../../tree/registries/dockerV2/DockerV2TagTreeItem";
 import { registryExpectedContextValues } from "../../tree/registries/registryContextValues";
@@ -13,7 +14,10 @@ import { nonNullProp } from "../../utils/nonNull";
 
 export async function copyRemoteImageDigest(context: IActionContext, node?: DockerV2TagTreeItem | AzureTaskRunTreeItem): Promise<void> {
     if (!node) {
-        node = await ext.registriesTree.showTreeItemPicker<DockerV2TagTreeItem>(registryExpectedContextValues.dockerV2.tag, context);
+        node = await ext.registriesTree.showTreeItemPicker<DockerV2TagTreeItem>(registryExpectedContextValues.dockerV2.tag, {
+            ...context,
+            noItemFoundErrorMessage: localize('vscode-docker.commands.registries.copyRemote.noImages', 'No remote images are available to copy the digest')
+        });
     }
 
     let digest: string;
@@ -21,13 +25,14 @@ export async function copyRemoteImageDigest(context: IActionContext, node?: Dock
         if (node.outputImage) {
             digest = nonNullProp(node.outputImage, 'digest');
         } else {
-            throw new Error('Failed to find output image for this task run.');
+            throw new Error(localize('vscode-docker.commands.registries.copyRemote.noOutputImage', 'Failed to find output image for this task run.'));
         }
     } else {
-        await node.runWithTemporaryDescription('Getting digest...', async () => {
+        await node.runWithTemporaryDescription(localize('vscode-docker.commands.registries.copyRemote.gettingDigest', 'Getting digest...'), async () => {
             digest = await (<DockerV2TagTreeItem>node).getDigest();
         });
     }
 
+    /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
     vscode.env.clipboard.writeText(digest);
 }

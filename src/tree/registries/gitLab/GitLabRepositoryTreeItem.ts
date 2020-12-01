@@ -12,17 +12,16 @@ import { GitLabProjectTreeItem } from "./GitLabProjectTreeItem";
 
 export class GitLabRepositoryTreeItem extends RemoteRepositoryTreeItemBase {
     public parent: GitLabProjectTreeItem;
-    public repoId: string;
+    public readonly repoId: string;
 
     private _nextLink?: string;
 
     public constructor(parent: GitLabProjectTreeItem, id: string, name: string) {
-        super(parent, name);
+        // GitLab returns an empty repository name,
+        // if the project's namespace is the same as the repository
+        super(parent, name || parent.label);
         this.repoId = id;
-    }
-
-    public get id(): string {
-        return this.repoId;
+        this.id = this.repoId;
     }
 
     public async loadMoreChildrenImpl(clearCache: boolean, _context: IActionContext): Promise<AzExtTreeItem[]> {
@@ -60,5 +59,6 @@ interface ITag {
 }
 
 interface ITagDetails {
+    /* eslint-disable-next-line camelcase */
     created_at: string;
 }

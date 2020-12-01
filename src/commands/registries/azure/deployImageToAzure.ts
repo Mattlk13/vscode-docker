@@ -3,13 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { WebSiteManagementClient } from 'azure-arm-website';
-import { Site, SiteConfig } from 'azure-arm-website/lib/models';
-import { NameValuePair } from 'request';
-import { Progress, window } from "vscode";
-import { AppKind, AppServicePlanListStep, IAppServiceWizardContext, SiteNameStep, WebsiteOS } from "vscode-azureappservice";
+import { WebSiteManagementClient, WebSiteManagementModels } from '@azure/arm-appservice'; // These are only dev-time imports so don't need to be lazy
+import { env, Progress, Uri, window } from "vscode";
+import { IAppServiceWizardContext } from "vscode-azureappservice"; // These are only dev-time imports so don't need to be lazy
 import { AzureWizard, AzureWizardExecuteStep, AzureWizardPromptStep, createAzureClient, IActionContext, LocationListStep, ResourceGroupListStep } from "vscode-azureextensionui";
 import { ext } from "../../../extensionVariables";
+import { localize } from "../../../localize";
 import { RegistryApi } from '../../../tree/registries/all/RegistryApi';
 import { AzureAccountTreeItem } from '../../../tree/registries/azure/AzureAccountTreeItem';
 import { azureRegistryProviderId } from '../../../tree/registries/azure/azureRegistryProvider';
@@ -29,10 +28,13 @@ export async function deployImageToAzure(context: IActionContext, node?: RemoteT
         node = await ext.registriesTree.showTreeItemPicker<RemoteTagTreeItem>([registryExpectedContextValues.dockerHub.tag, registryExpectedContextValues.dockerV2.tag], context);
     }
 
+    const vscAzureAppService = await import('vscode-azureappservice');
+    vscAzureAppService.registerAppServiceExtensionVariables(ext);
+
     const wizardContext: IActionContext & Partial<IAppServiceWizardContext> = {
         ...context,
-        newSiteOS: WebsiteOS.linux,
-        newSiteKind: AppKind.app
+        newSiteOS: vscAzureAppService.WebsiteOS.linux,
+        newSiteKind: vscAzureAppService.AppKind.app
     };
     const promptSteps: AzureWizardPromptStep<IAppServiceWizardContext>[] = [];
     // Create a temporary azure account tree item since Azure might not be connected
@@ -43,37 +45,46 @@ export async function deployImageToAzure(context: IActionContext, node?: RemoteT
     }
 
     promptSteps.push(...[
-        new SiteNameStep(),
+        new vscAzureAppService.SiteNameStep(),
         new ResourceGroupListStep(),
-        new AppServicePlanListStep(),
-        new LocationListStep()
+        new vscAzureAppService.AppServicePlanListStep()
     ]);
+    LocationListStep.addStep(wizardContext, promptSteps);
 
     // Get site config before running the wizard so that any problems with the tag tree item are shown at the beginning of the process
-    const siteConfig: SiteConfig = await getNewSiteConfig(node);
+    const siteConfig: WebSiteManagementModels.SiteConfig = await getNewSiteConfig(node);
     const executeSteps: AzureWizardExecuteStep<IAppServiceWizardContext>[] = [
         new DockerSiteCreateStep(siteConfig),
         new DockerWebhookCreateStep(node)
     ];
 
-    const title = 'Create new web app';
+    const title = localize('vscode-docker.commands.registries.azure.deployImage.title', 'Create new web app');
     const wizard = new AzureWizard(wizardContext, { title, promptSteps, executeSteps });
     await wizard.prompt();
     await wizard.execute();
 
-    const site: Site = nonNullProp(wizardContext, 'site');
-    const createdNewWebApp: string = `Successfully created web app "${site.name}": https://${site.defaultHostName}`;
+    const site: WebSiteManagementModels.Site = nonNullProp(wizardContext, 'site');
+    const siteUri: string = `https://${site.defaultHostName}`;
+    const createdNewWebApp: string = localize('vscode-docker.commands.registries.azure.deployImage.created', 'Successfully created web app "{0}": {1}', site.name, siteUri);
     ext.outputChannel.appendLine(createdNewWebApp);
+
+    const openSite: string = localize('vscode-docker.commands.registries.azure.deployImage.openSite', 'Open Site');
     // don't wait
-    window.showInformationMessage(createdNewWebApp);
+    /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
+    window.showInformationMessage(createdNewWebApp, ...[openSite]).then((selection) => {
+        if (selection === openSite) {
+            /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
+            env.openExternal(Uri.parse(siteUri));
+        }
+    });
 }
 
-async function getNewSiteConfig(node: RemoteTagTreeItem): Promise<SiteConfig> {
+async function getNewSiteConfig(node: RemoteTagTreeItem): Promise<WebSiteManagementModels.SiteConfig> {
     let registryTI: RegistryTreeItemBase = node.parent.parent;
 
     let username: string | undefined;
     let password: string | undefined;
-    let appSettings: NameValuePair[] = [];
+    let appSettings: WebSiteManagementModels.NameValuePair[] = [];
     if (registryTI instanceof DockerHubNamespaceTreeItem) {
         username = registryTI.parent.username;
         password = await registryTI.parent.getPassword();
@@ -83,7 +94,7 @@ async function getNewSiteConfig(node: RemoteTagTreeItem): Promise<SiteConfig> {
         if (registryTI instanceof AzureRegistryTreeItem) {
             const cred = await registryTI.tryGetAdminCredentials();
             if (!cred) {
-                throw new Error('Azure App service currently only supports running images from Azure Container Registries with admin enabled');
+                throw new Error(localize('vscode-docker.commands.registries.azure.deployImage.notAdminEnabled', 'Azure App service currently only supports running images from Azure Container Registries with admin enabled'));
             } else {
                 username = cred.username;
                 password = nonNullProp(cred, 'passwords')[0].value;
@@ -93,10 +104,10 @@ async function getNewSiteConfig(node: RemoteTagTreeItem): Promise<SiteConfig> {
             username = registryTI.cachedProvider.username;
             password = await getRegistryPassword(registryTI.cachedProvider);
         } else {
-            throw new RangeError(`Unrecognized node type "${registryTI.constructor.name}"`);
+            throw new RangeError(localize('vscode-docker.commands.registries.azure.deployImage.unrecognizedNodeTypeA', 'Unrecognized node type "{0}"', registryTI.constructor.name));
         }
     } else {
-        throw new RangeError(`Unrecognized node type "${registryTI.constructor.name}"`);
+        throw new RangeError(localize('vscode-docker.commands.registries.azure.deployImage.unrecognizedNodeTypeB', 'Unrecognized node type "{0}"', registryTI.constructor.name));
     }
 
     if (username && password) {
@@ -115,19 +126,20 @@ async function getNewSiteConfig(node: RemoteTagTreeItem): Promise<SiteConfig> {
 class DockerSiteCreateStep extends AzureWizardExecuteStep<IAppServiceWizardContext> {
     public priority: number = 140;
 
-    private _siteConfig: SiteConfig;
+    private _siteConfig: WebSiteManagementModels.SiteConfig;
 
-    public constructor(siteConfig: SiteConfig) {
+    public constructor(siteConfig: WebSiteManagementModels.SiteConfig) {
         super();
         this._siteConfig = siteConfig;
     }
 
     public async execute(context: IAppServiceWizardContext, progress: Progress<{ message?: string; increment?: number }>): Promise<void> {
-        const creatingNewApp: string = `Creating web app "${context.newSiteName}"...`;
+        const creatingNewApp: string = localize('vscode-docker.commands.registries.azure.deployImage.creatingWebApp', 'Creating web app "{0}"...', context.newSiteName);
         ext.outputChannel.appendLine(creatingNewApp);
         progress.report({ message: creatingNewApp });
 
-        const client: WebSiteManagementClient = createAzureClient(context, WebSiteManagementClient);
+        const armAppService = await import('@azure/arm-appservice');
+        const client: WebSiteManagementClient = createAzureClient(context, armAppService.WebSiteManagementClient);
         context.site = await client.webApps.createOrUpdate(nonNullValueAndProp(context.resourceGroup, 'name'), nonNullProp(context, 'newSiteName'), {
             name: context.newSiteName,
             kind: 'app,linux',

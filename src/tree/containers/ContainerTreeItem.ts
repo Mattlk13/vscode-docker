@@ -3,36 +3,55 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Container } from "dockerode";
-import { AzExtParentTreeItem, AzExtTreeItem } from "vscode-azureextensionui";
+import * as vscode from 'vscode';
+import { AzExtParentTreeItem, AzExtTreeItem, IActionContext } from "vscode-azureextensionui";
+import { DockerOSType } from '../../docker/Common';
+import { DockerContainer, DockerPort } from "../../docker/Containers";
 import { ext } from "../../extensionVariables";
+import { MultiSelectNode } from '../../utils/multiSelectNodes';
+import { AzExtParentTreeItemIntermediate } from "../AzExtParentTreeItemIntermediate";
 import { getThemedIconPath, IconPath } from '../IconPath';
+import { getTreeId } from "../LocalRootTreeItemBase";
 import { getContainerStateIcon } from "./ContainerProperties";
-import { LocalContainerInfo } from "./LocalContainerInfo";
+import { DockerContainerInfo } from './ContainersTreeItem';
+import { FilesTreeItem } from "./files/FilesTreeItem";
 
-export class ContainerTreeItem extends AzExtTreeItem {
+export class ContainerTreeItem extends AzExtParentTreeItemIntermediate implements MultiSelectNode {
     public static allContextRegExp: RegExp = /Container$/;
-    private readonly _item: LocalContainerInfo;
+    public static runningContainerRegExp: RegExp = /^runningContainer$/i;
+    private readonly _item: DockerContainerInfo;
+    private children: AzExtTreeItem[] | undefined;
+    private containerOS: DockerOSType;
 
-    public constructor(parent: AzExtParentTreeItem, itemInfo: LocalContainerInfo) {
+    public constructor(parent: AzExtParentTreeItem, itemInfo: DockerContainerInfo) {
         super(parent);
         this._item = itemInfo;
     }
 
+    public readonly canMultiSelect: boolean = true;
+
     public get id(): string {
-        return this._item.treeId;
+        return getTreeId(this._item);
     }
 
     public get createdTime(): number {
-        return this._item.createdTime;
+        return this._item.CreatedTime;
     }
 
     public get containerId(): string {
-        return this._item.containerId;
+        return this._item.Id;
+    }
+
+    public get containerName(): string {
+        return this._item.Name;
     }
 
     public get fullTag(): string {
-        return this._item.fullTag;
+        return this._item.Image;
+    }
+
+    public get labels(): { [key: string]: string } {
+        return this._item.Labels;
     }
 
     public get label(): string {
@@ -44,7 +63,15 @@ export class ContainerTreeItem extends AzExtTreeItem {
     }
 
     public get contextValue(): string {
-        return this._item.state + 'Container';
+        return this._item.State + 'Container';
+    }
+
+    public get ports(): DockerPort[] {
+        return this._item.Ports;
+    }
+
+    public get containerItem(): DockerContainer {
+        return this._item;
     }
 
     /**
@@ -52,23 +79,63 @@ export class ContainerTreeItem extends AzExtTreeItem {
      * They add a context menu item "Attach Visual Studio Code" to our container nodes that relies on containerDesc
      * https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers
      */
-    public get containerDesc(): {} {
-        return this._item.data;
+    public get containerDesc(): { Id: string } {
+        return {
+            Id: this._item.Id,
+        };
     }
 
     public get iconPath(): IconPath {
-        if (this._item.status.includes('(unhealthy)')) {
+        if (this._item.Status.includes('(unhealthy)')) {
             return getThemedIconPath('statusWarning');
         } else {
-            return getContainerStateIcon(this._item.state);
+            return getContainerStateIcon(this._item.State);
         }
     }
 
-    public getContainer(): Container {
-        return ext.dockerode.getContainer(this.containerId);
+    public async deleteTreeItemImpl(context: IActionContext): Promise<void> {
+        return ext.dockerClient.removeContainer(context, this.containerId);
     }
 
-    public async deleteTreeItemImpl(): Promise<void> {
-        await this.getContainer().remove({ force: true });
+    public hasMoreChildrenImpl(): boolean {
+        return this._item.showFiles && this.isRunning && this.children === undefined;
+    }
+
+    public async loadMoreChildrenImpl(clearCache: boolean, context: IActionContext): Promise<AzExtTreeItem[]> {
+        if (clearCache) {
+            this.children = undefined;
+        }
+
+        if (this._item.showFiles && this.isRunning) {
+            this.children = [
+                new FilesTreeItem(
+                    this,
+                    vscode.workspace.fs,
+                    this.containerId,
+                    async c => {
+                        if (this.containerOS === undefined) {
+                            this.containerOS = (await ext.dockerClient.inspectContainer(c, this.containerId)).Platform;
+                        }
+
+                        return this.containerOS;
+                    })
+            ];
+        }
+
+        return this.children ?? [];
+    }
+
+    public isAncestorOfImpl(expectedContextValue: string | RegExp): boolean {
+        // If we're looking for something matching `Container$` in the expectedContextValue, it will not be a child of this item (which is the container)
+        // The only children of this item have `containerFile` and `containerDirectory` as context values
+        if (/Container\$?$/i.test(typeof expectedContextValue === 'string' ? expectedContextValue : expectedContextValue.source)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private get isRunning(): boolean {
+        return this._item.State.toLowerCase() === 'running';
     }
 }

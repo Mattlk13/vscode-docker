@@ -7,17 +7,18 @@ import * as fse from 'fs-extra';
 import * as os from 'os';
 import * as vscode from 'vscode';
 import { DialogResponses, IActionContext } from 'vscode-azureextensionui';
-import { openExternal } from '../../utils/openExternal';
+import { localize } from '../../localize';
+import { executeAsTask } from '../../utils/executeAsTask';
 import { getDockerOSType } from '../../utils/osUtils';
 
 export async function runAzureCliImage(context: IActionContext): Promise<void> {
-    let osType = await getDockerOSType();
+    let osType = await getDockerOSType(context);
     context.telemetry.properties.dockerOSType = osType;
 
     if (osType === "windows") {
-        const message = 'Currently, you can only run the Azure CLI when running Linux based containers.';
+        const message = localize('vscode-docker.commands.images.runAzureCli.linuxOnly', 'Currently, you can only run the Azure CLI when running Linux based containers.');
         if (await vscode.window.showErrorMessage(message, DialogResponses.learnMore) === DialogResponses.learnMore) {
-            await openExternal('https://docs.docker.com/docker-for-windows/#/switch-between-windows-and-linux-containers');
+            await vscode.env.openExternal(vscode.Uri.parse('https://docs.docker.com/docker-for-windows/#/switch-between-windows-and-linux-containers'));
         }
     } else {
         const option: string = process.platform === 'linux' ? '--net=host' : '';
@@ -26,19 +27,23 @@ export async function runAzureCliImage(context: IActionContext): Promise<void> {
         const homeDir: string = process.platform === 'win32' ? os.homedir().replace(/\\/g, '/') : os.homedir();
         let vol: string = '';
 
-        if (fse.existsSync(`${homeDir}/.azure`)) {
+        if (await fse.pathExists(`${homeDir}/.azure`)) {
             vol += ` -v ${homeDir}/.azure:/root/.azure`;
         }
-        if (fse.existsSync(`${homeDir}/.ssh`)) {
+
+        if (await fse.pathExists(`${homeDir}/.ssh`)) {
             vol += ` -v ${homeDir}/.ssh:/root/.ssh`;
         }
-        if (fse.existsSync(`${homeDir}/.kube`)) {
+
+        if (await fse.pathExists(`${homeDir}/.kube`)) {
             vol += ` -v ${homeDir}/.kube:/root/.kube`;
         }
 
-        const cmd: string = `docker run ${option} ${vol.trim()} -it --rm azuresdk/azure-cli-python:latest`;
-        const terminal: vscode.Terminal = vscode.window.createTerminal('Azure CLI');
-        terminal.sendText(cmd);
-        terminal.show();
+        const workspaceFolder = vscode.workspace?.workspaceFolders?.[0];
+        if (workspaceFolder) {
+            vol += ` -v ${workspaceFolder.uri.fsPath}:/workspace`;
+        }
+
+        await executeAsTask(context, `docker run ${option} ${vol.trim()} -it --rm mcr.microsoft.com/azure-cli:latest`, 'Azure CLI', { addDockerEnv: true, focus: true });
     }
 }

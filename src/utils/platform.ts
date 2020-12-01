@@ -3,14 +3,23 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export type PlatformOS = 'Windows' | 'Linux';
-export type Platform =
-    'Go' |
-    'Java' |
-    '.NET Core Console' |
-    'ASP.NET Core' |
-    'Node.js' |
-    'Python' |
-    'Ruby' |
-    'C++' |
-    'Other';
+export const AllPlatformOSs = ['Windows', 'Linux', 'Mac'] as const;
+export const AllPlatforms = [
+    'Node.js',
+    '.NET: ASP.NET Core',
+    '.NET: Core Console',
+    'Python: Django',
+    'Python: Flask',
+    'Python: General',
+    'Java',
+    'C++',
+    'Go',
+    'Ruby',
+    'Other'
+] as const;
+
+type PlatformOSTuple = typeof AllPlatformOSs;
+export type PlatformOS = PlatformOSTuple[number];
+
+type PlatformTuple = typeof AllPlatforms;
+export type Platform = PlatformTuple[number];

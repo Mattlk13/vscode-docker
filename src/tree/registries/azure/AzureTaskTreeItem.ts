@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ContainerRegistryManagementModels as AcrModels } from "azure-arm-containerregistry";
+import { ContainerRegistryManagementModels as AcrModels } from "@azure/arm-containerregistry";
 import { AzExtParentTreeItem, AzExtTreeItem, GenericTreeItem, IActionContext } from "vscode-azureextensionui";
+import { localize } from '../../../localize';
 import { nonNullValue, nonNullValueAndProp } from "../../../utils/nonNull";
-import { getThemedIconPath, IconPath } from "../../IconPath";
+import { getThemedIconPath } from "../../IconPath";
 import { AzureRegistryTreeItem } from "./AzureRegistryTreeItem";
 import { AzureTaskRunTreeItem } from "./AzureTaskRunTreeItem";
 import { AzureTasksTreeItem } from "./AzureTasksTreeItem";
@@ -23,10 +24,8 @@ export class AzureTaskTreeItem extends AzExtParentTreeItem {
     public constructor(parent: AzureTasksTreeItem, task: AcrModels.Task | undefined) {
         super(parent);
         this._task = task;
-    }
-
-    public get iconPath(): IconPath {
-        return getThemedIconPath('task');
+        this.iconPath = getThemedIconPath('task');
+        this.id = this._task ? this._task.id : undefined;
     }
 
     public get contextValue(): string {
@@ -34,11 +33,7 @@ export class AzureTaskTreeItem extends AzExtParentTreeItem {
     }
 
     public get label(): string {
-        return this._task ? this.taskName : 'Runs without a task';
-    }
-
-    public get id(): string | undefined {
-        return this._task ? this._task.id : undefined;
+        return this._task ? this.taskName : localize('vscode-docker.tree.registries.azure.runsWithoutTask', 'Runs without a task');
     }
 
     public get taskName(): string {
@@ -49,7 +44,7 @@ export class AzureTaskTreeItem extends AzExtParentTreeItem {
         return !!this._nextLink;
     }
 
-    public get properties(): {} {
+    public get properties(): unknown {
         return nonNullValue(this._task, '_task');
     }
 
@@ -70,7 +65,7 @@ export class AzureTaskTreeItem extends AzExtParentTreeItem {
 
         if (clearCache && runListResult.length === 0 && this._task) {
             const ti = new GenericTreeItem(this, {
-                label: 'Run task...',
+                label: localize('vscode-docker.tree.registries.azure.runTask', 'Run Task...'),
                 commandId: 'vscode-docker.registries.azure.runTask',
                 contextValue: 'runTask'
             });
@@ -96,7 +91,7 @@ export class AzureTaskTreeItem extends AzExtParentTreeItem {
 
     private static async getTaskRuns(registryTI: AzureRegistryTreeItem, filter: string, nextLink: string | undefined): Promise<AcrModels.RunListResult> {
         return nextLink === undefined ?
-            await registryTI.client.runs.list(registryTI.resourceGroup, registryTI.registryName, { filter }) :
-            await registryTI.client.runs.listNext(nextLink);
+            await (await registryTI.getClient()).runs.list(registryTI.resourceGroup, registryTI.registryName, { filter }) :
+            await (await registryTI.getClient()).runs.listNext(nextLink);
     }
 }

@@ -3,26 +3,33 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { VolumeInspectInfo } from 'dockerode';
-import { ext } from '../../extension.bundle';
-import { generateCreatedTimeISOString, ITestTreeItem, IValidateTreeOptions, validateTree } from './validateTree';
-
-const testVolumes: Partial<VolumeInspectInfo & { CreatedAt: string }>[] = [
+import { ext, DockerVolume } from '../../extension.bundle';
+import { generateCreatedTimeInMs, ITestTreeItem, IValidateTreeOptions, validateTree } from './validateTree';
+// TODO: Update the test to validate the '1 month ago' description Issue #1758
+const testVolumes: DockerVolume[] = [
     {
-        CreatedAt: generateCreatedTimeISOString(1),
+        CreatedTime: generateCreatedTimeInMs(1),
         Name: "nginxVol",
+        Driver: 'test',
+        Id: undefined,
     },
     {
-        CreatedAt: generateCreatedTimeISOString(44),
+        CreatedTime: generateCreatedTimeInMs(2),
         Name: "my-vol",
+        Driver: 'test',
+        Id: undefined,
     },
     {
-        CreatedAt: generateCreatedTimeISOString(45),
+        CreatedTime: generateCreatedTimeInMs(2),
         Name: "zz",
+        Driver: 'test',
+        Id: undefined,
     },
     {
-        CreatedAt: generateCreatedTimeISOString(90),
+        CreatedTime: generateCreatedTimeInMs(90),
         Name: "83c3eaffa92c0caf9ab34df3931f37b094464cb0daaab274c482010129fc7c73",
+        Driver: 'test',
+        Id: undefined,
     }
 ];
 
@@ -36,8 +43,8 @@ suite('Volumes Tree', async () => {
             {},
             [
                 { label: "nginxVol", description: "a day ago" },
-                { label: "my-vol", description: "a month ago" },
-                { label: "zz", description: "a month ago" },
+                { label: "my-vol", description: "2 days ago" },
+                { label: "zz", description: "2 days ago" },
                 { label: "83c3eaffa92c0caf9ab34df3931f37b094464cb0daaab274c482010129fc7c73", description: "3 months ago" },
             ]);
     });
@@ -52,8 +59,8 @@ suite('Volumes Tree', async () => {
             },
             [
                 { label: "nginxVol", description: "a day ago" },
-                { label: "my-vol", description: "a month ago" },
-                { label: "zz", description: "a month ago" },
+                { label: "my-vol", description: "2 days ago" },
+                { label: "zz", description: "2 days ago" },
                 { label: "83c3eaffa92c0caf9ab34df3931f37b094464cb0daaab274c482010129fc7c73", description: "3 months ago" },
             ]);
     });
@@ -116,7 +123,7 @@ suite('Volumes Tree', async () => {
                     ]
                 },
                 {
-                    label: "a month ago",
+                    label: "2 days ago",
                     children: [
                         { label: "my-vol" },
                         { label: "zz" },

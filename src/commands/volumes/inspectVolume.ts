@@ -5,13 +5,15 @@
 
 import { IActionContext, openReadOnlyJson } from "vscode-azureextensionui";
 import { ext } from "../../extensionVariables";
+import { localize } from "../../localize";
 import { VolumeTreeItem } from "../../tree/volumes/VolumeTreeItem";
 
 export async function inspectVolume(context: IActionContext, node?: VolumeTreeItem): Promise<void> {
     if (!node) {
-        node = await ext.volumesTree.showTreeItemPicker<VolumeTreeItem>(VolumeTreeItem.contextValue, context);
+        await ext.volumesTree.refresh();
+        node = await ext.volumesTree.showTreeItemPicker<VolumeTreeItem>(VolumeTreeItem.contextValue, { ...context, noItemFoundErrorMessage: localize('vscode-docker.commands.volumes.inspect.noVolumes', 'No volumes are available to inspect') });
     }
 
-    const inspectInfo = await node.getVolume().inspect();
+    const inspectInfo = await ext.dockerClient.inspectVolume(context, node.volumeName);
     await openReadOnlyJson(node, inspectInfo);
 }
